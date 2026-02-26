@@ -53,21 +53,27 @@ This single-file component contains **everything**:
   - `"SD Input"` — Student Development KPI scores
   - `"TL Input"` — Teaching & Learning KPI scores
   - `"CS Input"` — Catholic School Identity KPI scores
-- **PDF generators** — 3 branded report functions:
+- **Zoho integration** — `fetchZohoData()` connects to Zoho Creator REST API (OAuth) to import school data directly from Zoho databases without manual Excel upload
+- **`computeSchoolAnalysis()`** — deep analysis helper: pillar vs system comparison, KPI-level breakdown, district benchmarking, strengths/weaknesses identification
+- **PDF generators** — 4 branded report functions:
   - `generateDashboardPDF()` — system overview with summary stats, status distribution, top 10, bottom 10
   - `generateRankingsPDF()` — full rankings table for all schools
   - `generateSchoolPDF()` — individual school report card with pillar breakdown and visual score bars
-- **3 views:**
+  - `generateAnalysisPDF()` — comprehensive integration analysis report with pillar vs system, district comparison, strengths/weaknesses, and KPI-level breakdown
+- **4 views:**
   1. **Dashboard** — system overview gauges, status pie chart, pillar bar chart, top/bottom 10 tables
-  2. **Rankings** — full sortable table of all schools
+  2. **Rankings** — full sortable table of all schools with per-row "Analyse" button
   3. **School View** — individual scorecard with radar chart
+  4. **Analysis View** — deep integration analysis: school vs system bar chart, pillar detail table, strengths/weaknesses cards, district comparison, KPI-level breakdowns per pillar, dual-overlay radar chart
 - **Sub-components:** `Footer`, `StatusBadge`, `MetaChip`, `SchoolMiniTable`
 
 ### Data Flow
 
 ```
-User uploads .xlsx → FileReader → XLSX.read() → parseWorkbook()
-  → maps each school's 4 pillar averages → computes overall score
+User uploads .xlsx  → FileReader → XLSX.read() → parseWorkbook()
+  — OR —
+User connects Zoho  → fetchZohoData() → builds XLSX workbook in memory → parseWorkbook()
+  → maps each school's 4 pillar averages + KPI-level detail → computes overall score
   → assigns status (Excellent ≥80, Good ≥60, Developing ≥40, Needs Support <40)
   → sorts by overall score descending → renders charts/tables
 ```
@@ -133,7 +139,17 @@ npm run lint         # Run ESLint
 ### Excel Parsing
 - The npm package is `xlsx` (import as `import * as XLSX from "xlsx"`) — **never** `"sheetjs"`
 - Column names are flexibly matched: the parser checks for `"School ID"`, `"SchoolID"`, and `"school_id"` variants
+- `parseWorkbook()` now also extracts KPI-level detail (`kpiDetail`) per school for the analysis view
 - All parsing is client-side — no server upload
+
+### Zoho Integration
+- Client-side REST calls to Zoho Creator API v2 (`https://{domain}/api/v2/{appName}/report/{reportName}`)
+- OAuth token passed via `Authorization: Zoho-oauthtoken {token}` header
+- Supports 4 Zoho data centres: US, EU, India, AU (selectable via domain dropdown)
+- Fetches 5 reports (one per sheet): `{prefix}_School_Register`, `{prefix}_AE_Input`, etc.
+- Response rows are converted into an in-memory XLSX workbook and parsed identically to file uploads
+- Required OAuth scope: `ZohoCreator.report.READ`
+- Token is never persisted — entered per session
 
 ### PDF Generation
 - Import `jsPDF` from `"jspdf"` and `"jspdf-autotable"` (side-effect import)
@@ -179,4 +195,4 @@ No environment variables or server config required.
 - The BLOOM cross logo SVG must appear in the header, upload screen, and footer
 - All green gradients must flow from `#3A7D5C` → `#1B4332`
 - Gold (`#C8973E`) is reserved for CTAs, active nav tabs, and accent highlights
-- Do not add a backend — this is a purely client-side application
+- Do not add a backend — this is a purely client-side application (Zoho calls are client-side CORS requests)

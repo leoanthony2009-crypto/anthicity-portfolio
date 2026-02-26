@@ -55,17 +55,25 @@ function ScoreGauge({ value, label, size = 120, color = T.green1 }) {
   const pct = Math.min(Math.max(value, 0), 100);
   const offset = c - (pct / 100) * c;
   return (
-    <div style={{ textAlign: "center" }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.sageLight} strokeWidth="10" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
-          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-      </svg>
-      <div style={{ marginTop: -size / 2 - 14, fontFamily: SERIF, fontSize: size * 0.25, fontWeight: 700, color: T.green2 }}>
-        {pct.toFixed(1)}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <div style={{ position: "relative", width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.sageLight} strokeWidth="10" />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
+            strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+        </svg>
+        <div style={{
+          position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: SERIF, fontSize: size * 0.24, fontWeight: 700, color: T.cream,
+        }}>
+          {pct.toFixed(1)}
+        </div>
       </div>
-      <div style={{ marginTop: size * 0.13, fontSize: 13, color: T.sage, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 13, color: T.sage, fontWeight: 600, textAlign: "center", lineHeight: 1.2, maxWidth: size + 20 }}>
+        {label}
+      </div>
     </div>
   );
 }
@@ -101,36 +109,56 @@ function parseWorkbook(wb) {
   const tlRows   = read("TL Input");
   const csRows   = read("CS Input");
 
-  const kpiMap = (rows, prefix) => {
+  const kpiMap = (rows) => {
     const m = {};
     rows.forEach((r) => {
       const id = r["School ID"] ?? r["SchoolID"] ?? r["school_id"];
       if (id == null) return;
-      const scores = Object.keys(r)
-        .filter((k) => k !== "School ID" && k !== "SchoolID" && k !== "school_id")
-        .map((k) => Number(r[k]) || 0);
+      const kpiEntries = {};
+      const scores = [];
+      Object.keys(r).forEach((k) => {
+        if (k === "School ID" || k === "SchoolID" || k === "school_id") return;
+        const val = Number(r[k]) || 0;
+        kpiEntries[k] = val;
+        scores.push(val);
+      });
       const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      m[id] = { scores, avg, prefix };
+      m[id] = { scores, avg, kpis: kpiEntries };
     });
     return m;
   };
 
-  const ae = kpiMap(aeRows, "AE");
-  const sd = kpiMap(sdRows, "SD");
-  const tl = kpiMap(tlRows, "TL");
-  const cs = kpiMap(csRows, "CS");
+  const ae = kpiMap(aeRows);
+  const sd = kpiMap(sdRows);
+  const tl = kpiMap(tlRows);
+  const cs = kpiMap(csRows);
 
-  const schools = register.map((r) => {
-    const id = r["School ID"] ?? r["SchoolID"] ?? r["school_id"] ?? r["ID"];
-    const name = r["School Name"] ?? r["SchoolName"] ?? r["school_name"] ?? r["Name"] ?? `School ${id}`;
-    const district = r["District"] ?? r["district"] ?? r["Region"] ?? "";
-    const type = r["Type"] ?? r["type"] ?? r["Category"] ?? "";
+  const schools = register.map((r, idx) => {
+    // Flexible column matching — try common variants, then fall back to first column value
+    const keys = Object.keys(r);
+    const findCol = (...names) => {
+      for (const n of names) {
+        if (r[n] != null) return r[n];
+      }
+      return undefined;
+    };
+
+    const id = findCol("School ID", "SchoolID", "school_id", "ID", "id") ?? (keys[0] ? r[keys[0]] : idx + 1);
+    const name = findCol("School Name", "SchoolName", "school_name", "Name", "name") ?? `School ${id}`;
+    const district = findCol("District", "district", "Region", "region") ?? "";
+    const type = findCol("Type", "type", "Category", "category") ?? "";
 
     const pillars = {
       AE: ae[id]?.avg ?? 0,
       SD: sd[id]?.avg ?? 0,
       TL: tl[id]?.avg ?? 0,
       CS: cs[id]?.avg ?? 0,
+    };
+    const kpiDetail = {
+      AE: ae[id]?.kpis ?? {},
+      SD: sd[id]?.kpis ?? {},
+      TL: tl[id]?.kpis ?? {},
+      CS: cs[id]?.kpis ?? {},
     };
     const overall = (pillars.AE + pillars.SD + pillars.TL + pillars.CS) / 4;
 
@@ -140,7 +168,7 @@ function parseWorkbook(wb) {
     else if (overall >= 40) status = "Developing";
     else status = "Needs Support";
 
-    return { id, name, district, type, pillars, overall, status };
+    return { id, name, district, type, pillars, kpiDetail, overall, status };
   });
 
   schools.sort((a, b) => b.overall - a.overall);
@@ -148,34 +176,114 @@ function parseWorkbook(wb) {
 }
 
 /* ================================================================
+   Zoho API Integration
+   ================================================================ */
+async function fetchZohoData(config) {
+  const { domain, appName, reportName, authToken } = config;
+  const baseUrl = `https://${domain}/api/v2/${appName}/report/${reportName}`;
+
+  const headers = { Authorization: `Zoho-oauthtoken ${authToken}` };
+
+  const resp = await fetch(baseUrl, {
+    method: "GET",
+    headers,
+    mode: "cors",
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`Zoho API ${resp.status}: ${errText || resp.statusText}`);
+  }
+
+  const json = await resp.json();
+  return json.data || json;
+}
+
+/* ================================================================
+   School Analysis Helpers
+   ================================================================ */
+function computeSchoolAnalysis(school, allSchools, stats) {
+  const rank = allSchools.findIndex((s) => s.id === school.id) + 1;
+  const n = allSchools.length;
+  const percentile = ((n - rank) / n * 100).toFixed(1);
+
+  // Pillar vs system comparison
+  const pillarComparison = PILLAR_KEYS.map((k, i) => {
+    const schoolScore = school.pillars[k];
+    const sysAvg = stats.pillarAvgs[i];
+    const diff = schoolScore - sysAvg;
+    const allScores = allSchools.map((s) => s.pillars[k]).sort((a, b) => a - b);
+    const pillarRank = allSchools.filter((s) => s.pillars[k] > schoolScore).length + 1;
+    return {
+      key: k,
+      name: PILLAR_NAMES[i],
+      score: schoolScore,
+      sysAvg,
+      diff,
+      pillarRank,
+      min: allScores[0] || 0,
+      max: allScores[allScores.length - 1] || 0,
+    };
+  });
+
+  // Strengths and weaknesses
+  const sorted = [...pillarComparison].sort((a, b) => b.score - a.score);
+  const strengths = sorted.filter((p) => p.diff > 0);
+  const weaknesses = sorted.filter((p) => p.diff <= 0);
+
+  // KPI-level breakdown
+  const kpiBreakdown = PILLAR_KEYS.map((k, i) => {
+    const kpis = school.kpiDetail[k];
+    const entries = Object.entries(kpis).map(([name, score]) => {
+      // Compute system average for this specific KPI
+      const kpiAvgs = allSchools.map((s) => s.kpiDetail[k]?.[name] ?? 0);
+      const kpiSysAvg = kpiAvgs.length ? kpiAvgs.reduce((a, b) => a + b, 0) / kpiAvgs.length : 0;
+      return { name, score, sysAvg: kpiSysAvg, diff: score - kpiSysAvg };
+    });
+    return { pillar: PILLAR_NAMES[i], key: k, kpis: entries };
+  });
+
+  // District comparison
+  const districtPeers = allSchools.filter((s) => s.district === school.district && s.id !== school.id);
+  const districtAvg = districtPeers.length > 0
+    ? districtPeers.reduce((sum, s) => sum + s.overall, 0) / districtPeers.length
+    : null;
+  const districtRank = districtPeers.length > 0
+    ? [...districtPeers, school].sort((a, b) => b.overall - a.overall).findIndex((s) => s.id === school.id) + 1
+    : 1;
+  const districtTotal = districtPeers.length + 1;
+
+  return {
+    rank, percentile, pillarComparison, strengths, weaknesses,
+    kpiBreakdown, districtAvg, districtRank, districtTotal, districtPeers,
+  };
+}
+
+/* ================================================================
    PDF Report Generation
    ================================================================ */
 function pdfHeader(doc, title) {
-  // Green gradient header band
-  doc.setFillColor(58, 125, 92); // T.green1
+  doc.setFillColor(58, 125, 92);
   doc.rect(0, 0, 210, 32, "F");
-  doc.setFillColor(27, 67, 50); // T.green2
+  doc.setFillColor(27, 67, 50);
   doc.rect(0, 28, 210, 4, "F");
 
-  // Brand name
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(245, 239, 224); // T.cream
+  doc.setTextColor(245, 239, 224);
   doc.text("BLOOM", 14, 16);
 
-  // Subtitle
   doc.setFontSize(9);
-  doc.setTextColor(143, 174, 139); // T.sage
+  doc.setTextColor(143, 174, 139);
   doc.text("CEBM School Dashboard — Trinidad & Tobago", 14, 24);
 
-  // Title + date on right
   doc.setFontSize(10);
   doc.setTextColor(245, 239, 224);
   doc.text(title, 196, 16, { align: "right" });
   doc.setFontSize(8);
   doc.text(new Date().toLocaleDateString("en-TT", { year: "numeric", month: "long", day: "numeric" }), 196, 22, { align: "right" });
 
-  return 40; // y-offset after header
+  return 40;
 }
 
 function pdfFooter(doc) {
@@ -187,16 +295,22 @@ function pdfFooter(doc) {
     doc.setFontSize(7);
     doc.setTextColor(143, 174, 139);
     doc.text("ANTHICITY — Learning for Life", 14, 291);
-    doc.text(`© 2026 W. Gopaul`, 105, 291, { align: "center" });
+    doc.text("\u00A9 2026 W. Gopaul", 105, 291, { align: "center" });
     doc.text(`Page ${i} of ${pages}`, 196, 291, { align: "right" });
   }
 }
+
+const AUTO_TABLE_STYLES = {
+  theme: "grid",
+  headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+  alternateRowStyles: { fillColor: [237, 244, 235] },
+  margin: { left: 14, right: 14 },
+};
 
 function generateDashboardPDF(schools, stats) {
   const doc = new jsPDF();
   let y = pdfHeader(doc, "System Overview Report");
 
-  // Summary stats
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(27, 67, 50);
@@ -211,13 +325,9 @@ function generateDashboardPDF(schools, stats) {
     `Overall Average: ${stats.avgOverall.toFixed(1)}%`,
     ...PILLAR_KEYS.map((k, i) => `${PILLAR_NAMES[i]}: ${stats.pillarAvgs[i].toFixed(1)}%`),
   ];
-  summaryItems.forEach((item) => {
-    doc.text(item, 14, y);
-    y += 6;
-  });
+  summaryItems.forEach((item) => { doc.text(item, 14, y); y += 6; });
   y += 4;
 
-  // Status distribution
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(27, 67, 50);
@@ -225,22 +335,17 @@ function generateDashboardPDF(schools, stats) {
   y += 6;
 
   doc.autoTable({
+    ...AUTO_TABLE_STYLES,
     startY: y,
     head: [["Status", "Count", "Percentage"]],
     body: STATUS_LABELS.map((label, i) => [
-      label,
-      stats.statusCounts[i],
+      label, stats.statusCounts[i],
       `${((stats.statusCounts[i] / stats.n) * 100).toFixed(1)}%`,
     ]),
-    theme: "grid",
-    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [237, 244, 235] },
     styles: { fontSize: 9 },
-    margin: { left: 14, right: 14 },
   });
   y = doc.lastAutoTable.finalY + 10;
 
-  // Top 10
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(27, 67, 50);
@@ -248,6 +353,7 @@ function generateDashboardPDF(schools, stats) {
   y += 6;
 
   doc.autoTable({
+    ...AUTO_TABLE_STYLES,
     startY: y,
     head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
     body: schools.slice(0, 10).map((s, i) => [
@@ -256,14 +362,9 @@ function generateDashboardPDF(schools, stats) {
       s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
       s.overall.toFixed(1), s.status,
     ]),
-    theme: "grid",
-    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [237, 244, 235] },
     styles: { fontSize: 8 },
-    margin: { left: 14, right: 14 },
   });
 
-  // Bottom 10 on new page
   doc.addPage();
   y = pdfHeader(doc, "System Overview Report");
 
@@ -274,6 +375,7 @@ function generateDashboardPDF(schools, stats) {
   y += 6;
 
   doc.autoTable({
+    ...AUTO_TABLE_STYLES,
     startY: y,
     head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
     body: [...schools].slice(-10).reverse().map((s) => [
@@ -282,11 +384,7 @@ function generateDashboardPDF(schools, stats) {
       s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
       s.overall.toFixed(1), s.status,
     ]),
-    theme: "grid",
-    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [237, 244, 235] },
     styles: { fontSize: 8 },
-    margin: { left: 14, right: 14 },
   });
 
   pdfFooter(doc);
@@ -300,10 +398,11 @@ function generateRankingsPDF(schools) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(27, 67, 50);
-  doc.text(`Full Rankings — ${schools.length} Schools`, 14, y);
+  doc.text(`Full Rankings \u2014 ${schools.length} Schools`, 14, y);
   y += 6;
 
   doc.autoTable({
+    ...AUTO_TABLE_STYLES,
     startY: y,
     head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
     body: schools.map((s, i) => [
@@ -312,14 +411,8 @@ function generateRankingsPDF(schools) {
       s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
       s.overall.toFixed(1), s.status,
     ]),
-    theme: "grid",
-    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [237, 244, 235] },
     styles: { fontSize: 7, cellPadding: 2 },
-    margin: { left: 14, right: 14 },
-    didDrawPage: () => {
-      pdfHeader(doc, "Full Rankings Report");
-    },
+    didDrawPage: () => { pdfHeader(doc, "Full Rankings Report"); },
   });
 
   pdfFooter(doc);
@@ -330,14 +423,12 @@ function generateSchoolPDF(school, rank) {
   const doc = new jsPDF();
   let y = pdfHeader(doc, "School Report Card");
 
-  // School name
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(27, 67, 50);
   doc.text(school.name, 14, y);
   y += 10;
 
-  // Meta info
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(58, 125, 92);
@@ -357,7 +448,6 @@ function generateSchoolPDF(school, rank) {
   });
   y += 6;
 
-  // Pillar scores table
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(27, 67, 50);
@@ -365,6 +455,7 @@ function generateSchoolPDF(school, rank) {
   y += 6;
 
   doc.autoTable({
+    ...AUTO_TABLE_STYLES,
     startY: y,
     head: [["Pillar", "Score (%)", "Rating"]],
     body: PILLAR_KEYS.map((k, i) => {
@@ -372,15 +463,10 @@ function generateSchoolPDF(school, rank) {
       const rating = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Developing" : "Needs Support";
       return [PILLAR_NAMES[i], score.toFixed(1), rating];
     }),
-    theme: "grid",
-    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [237, 244, 235] },
     styles: { fontSize: 10 },
-    margin: { left: 14, right: 14 },
   });
   y = doc.lastAutoTable.finalY + 10;
 
-  // Overall summary box
   doc.setFillColor(237, 244, 235);
   doc.roundedRect(14, y, 182, 24, 4, 4, "F");
   doc.setFont("helvetica", "bold");
@@ -391,7 +477,6 @@ function generateSchoolPDF(school, rank) {
   doc.setTextColor(58, 125, 92);
   doc.text(`Status: ${school.status}`, 105, y + 18, { align: "center" });
 
-  // Pillar visual bars
   y += 34;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
@@ -406,23 +491,189 @@ function generateSchoolPDF(school, rank) {
     doc.setFontSize(9);
     doc.setTextColor(27, 67, 50);
     doc.text(PILLAR_NAMES[i], 14, y);
-
-    // Bar background
     doc.setFillColor(237, 244, 235);
     doc.roundedRect(70, y - 4, 110, 6, 2, 2, "F");
-
-    // Bar fill
-    const [r, g, b] = barColors[i];
-    doc.setFillColor(r, g, b);
+    const [cr, cg, cb] = barColors[i];
+    doc.setFillColor(cr, cg, cb);
     doc.roundedRect(70, y - 4, (score / 100) * 110, 6, 2, 2, "F");
-
-    // Score label
     doc.text(`${score.toFixed(1)}%`, 184, y, { align: "right" });
     y += 10;
   });
 
   pdfFooter(doc);
   doc.save(`CEBM_${school.name.replace(/[^a-zA-Z0-9]/g, "_")}_Report.pdf`);
+}
+
+/* ================================================================
+   School Analysis PDF (comprehensive)
+   ================================================================ */
+function generateAnalysisPDF(school, analysis, stats) {
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, "Integration Analysis Report");
+
+  // Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(27, 67, 50);
+  doc.text(school.name, 14, y);
+  y += 7;
+  doc.setFontSize(10);
+  doc.setTextColor(58, 125, 92);
+  doc.text(`Integration Analysis \u2014 Comprehensive School Report`, 14, y);
+  y += 10;
+
+  // Meta summary
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(27, 67, 50);
+  const metaLines = [
+    `Rank: ${analysis.rank} of ${stats.n}  |  Percentile: ${analysis.percentile}th  |  District: ${school.district || "N/A"}  |  Type: ${school.type || "N/A"}`,
+    `Overall Score: ${school.overall.toFixed(1)}%  |  Status: ${school.status}`,
+  ];
+  metaLines.forEach((line) => { doc.text(line, 14, y); y += 5; });
+  y += 4;
+
+  // Pillar vs System comparison table
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Pillar Performance vs System Average", 14, y);
+  y += 5;
+
+  doc.autoTable({
+    ...AUTO_TABLE_STYLES,
+    startY: y,
+    head: [["Pillar", "School", "System Avg", "Variance", "Pillar Rank", "Min", "Max"]],
+    body: analysis.pillarComparison.map((p) => [
+      p.name,
+      p.score.toFixed(1),
+      p.sysAvg.toFixed(1),
+      `${p.diff >= 0 ? "+" : ""}${p.diff.toFixed(1)}`,
+      `${p.pillarRank} of ${stats.n}`,
+      p.min.toFixed(1),
+      p.max.toFixed(1),
+    ]),
+    styles: { fontSize: 8 },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // District comparison
+  if (analysis.districtAvg !== null) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(27, 67, 50);
+    doc.text("District Comparison", 14, y);
+    y += 5;
+
+    doc.autoTable({
+      ...AUTO_TABLE_STYLES,
+      startY: y,
+      head: [["Metric", "Value"]],
+      body: [
+        ["District", school.district],
+        ["District Rank", `${analysis.districtRank} of ${analysis.districtTotal}`],
+        ["School Score", `${school.overall.toFixed(1)}%`],
+        ["District Average", `${analysis.districtAvg.toFixed(1)}%`],
+        ["Variance from District", `${(school.overall - analysis.districtAvg) >= 0 ? "+" : ""}${(school.overall - analysis.districtAvg).toFixed(1)}%`],
+      ],
+      styles: { fontSize: 8 },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  // Strengths & Weaknesses
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Strengths (Above System Average)", 14, y);
+  y += 5;
+
+  if (analysis.strengths.length > 0) {
+    doc.autoTable({
+      ...AUTO_TABLE_STYLES,
+      startY: y,
+      head: [["Pillar", "Score", "System Avg", "Above By"]],
+      body: analysis.strengths.map((p) => [
+        p.name, p.score.toFixed(1), p.sysAvg.toFixed(1), `+${p.diff.toFixed(1)}`,
+      ]),
+      styles: { fontSize: 8 },
+    });
+    y = doc.lastAutoTable.finalY + 6;
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text("No pillars above system average.", 14, y);
+    y += 6;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Areas for Development (At or Below System Average)", 14, y);
+  y += 5;
+
+  if (analysis.weaknesses.length > 0) {
+    doc.autoTable({
+      ...AUTO_TABLE_STYLES,
+      startY: y,
+      head: [["Pillar", "Score", "System Avg", "Gap"]],
+      body: analysis.weaknesses.map((p) => [
+        p.name, p.score.toFixed(1), p.sysAvg.toFixed(1), p.diff.toFixed(1),
+      ]),
+      styles: { fontSize: 8 },
+    });
+    y = doc.lastAutoTable.finalY + 6;
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text("All pillars above system average.", 14, y);
+    y += 6;
+  }
+
+  // KPI-level breakdown on new page
+  doc.addPage();
+  y = pdfHeader(doc, "Integration Analysis Report");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("KPI-Level Breakdown", 14, y);
+  y += 8;
+
+  analysis.kpiBreakdown.forEach((pillar) => {
+    if (pillar.kpis.length === 0) return;
+
+    // Check if we need a new page
+    if (y > 240) {
+      doc.addPage();
+      y = pdfHeader(doc, "Integration Analysis Report");
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(58, 125, 92);
+    doc.text(pillar.pillar, 14, y);
+    y += 5;
+
+    doc.autoTable({
+      ...AUTO_TABLE_STYLES,
+      startY: y,
+      head: [["KPI", "School Score", "System Avg", "Variance"]],
+      body: pillar.kpis.map((kpi) => [
+        kpi.name,
+        kpi.score.toFixed(1),
+        kpi.sysAvg.toFixed(1),
+        `${kpi.diff >= 0 ? "+" : ""}${kpi.diff.toFixed(1)}`,
+      ]),
+      styles: { fontSize: 7, cellPadding: 2 },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  });
+
+  pdfFooter(doc);
+  doc.save(`CEBM_${school.name.replace(/[^a-zA-Z0-9]/g, "_")}_Analysis.pdf`);
 }
 
 /* ================================================================
@@ -433,6 +684,18 @@ export default function CEBMDashboard() {
   const [view, setView] = useState("dashboard");
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [error, setError] = useState("");
+
+  // Zoho integration state
+  const [showZoho, setShowZoho] = useState(false);
+  const [zohoConfig, setZohoConfig] = useState({
+    domain: "creator.zoho.com",
+    appName: "",
+    reportName: "",
+    authToken: "",
+  });
+  const [zohoLoading, setZohoLoading] = useState(false);
+  const [zohoError, setZohoError] = useState("");
+  const [zohoSuccess, setZohoSuccess] = useState("");
 
   /* ---------- File upload handler ---------- */
   const handleUpload = useCallback((e) => {
@@ -457,6 +720,59 @@ export default function CEBMDashboard() {
     reader.readAsBinaryString(file);
   }, []);
 
+  /* ---------- Zoho import handler ---------- */
+  const handleZohoImport = useCallback(async () => {
+    if (!zohoConfig.appName || !zohoConfig.authToken) {
+      setZohoError("App Name and Auth Token are required.");
+      return;
+    }
+    setZohoLoading(true);
+    setZohoError("");
+    setZohoSuccess("");
+
+    try {
+      // Fetch each report/sheet from Zoho
+      const sheetNames = ["School Register", "AE Input", "SD Input", "TL Input", "CS Input"];
+      const wb = XLSX.utils.book_new();
+
+      for (const sheetName of sheetNames) {
+        const reportName = zohoConfig.reportName
+          ? `${zohoConfig.reportName}_${sheetName.replace(/\s/g, "_")}`
+          : sheetName.replace(/\s/g, "_");
+
+        try {
+          const data = await fetchZohoData({
+            ...zohoConfig,
+            reportName,
+          });
+
+          if (Array.isArray(data) && data.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+          }
+        } catch {
+          // If individual sheet fails, try the combined report
+          if (sheetName === "School Register") throw new Error(`Could not fetch "${reportName}" from Zoho.`);
+        }
+      }
+
+      const parsed = parseWorkbook(wb);
+      if (parsed.length === 0) {
+        setZohoError("No school data found in Zoho response. Check report names.");
+        return;
+      }
+
+      setSchools(parsed);
+      setZohoSuccess(`Loaded ${parsed.length} schools from Zoho.`);
+      setView("dashboard");
+      setShowZoho(false);
+    } catch (err) {
+      setZohoError(err.message);
+    } finally {
+      setZohoLoading(false);
+    }
+  }, [zohoConfig]);
+
   /* ---------- Derived data ---------- */
   const stats = useMemo(() => {
     if (!schools) return null;
@@ -470,6 +786,12 @@ export default function CEBMDashboard() {
     );
     return { n, avgOverall, pillarAvgs, statusCounts };
   }, [schools]);
+
+  /* ---------- School analysis ---------- */
+  const schoolAnalysis = useMemo(() => {
+    if (!selectedSchool || !schools || !stats) return null;
+    return computeSchoolAnalysis(selectedSchool, schools, stats);
+  }, [selectedSchool, schools, stats]);
 
   /* ---------- Styles ---------- */
   const S = {
@@ -486,7 +808,7 @@ export default function CEBMDashboard() {
     logoGroup: { display: "flex", alignItems: "center", gap: 10 },
     title: { fontFamily: SERIF, fontSize: 26, fontWeight: 700, color: T.cream, letterSpacing: "0.08em", margin: 0 },
     subtitle: { fontSize: 12, color: T.sage, margin: 0, letterSpacing: "0.04em" },
-    nav: { display: "flex", gap: 4 },
+    nav: { display: "flex", gap: 4, flexWrap: "wrap" },
     navBtn: (active) => ({
       background: active ? T.gold : "transparent",
       border: `1px solid ${active ? T.gold : "rgba(245,239,224,0.2)"}`,
@@ -496,7 +818,7 @@ export default function CEBMDashboard() {
     }),
     main: { maxWidth: 1280, margin: "0 auto", padding: 24 },
     card: {
-      background: T.white, border: `1px solid #e0e8e0`, borderRadius: 12,
+      background: T.white, border: "1px solid #e0e8e0", borderRadius: 12,
       padding: 20, boxShadow: "0 1px 6px rgba(27,67,50,0.06)",
     },
     heroCard: {
@@ -507,10 +829,28 @@ export default function CEBMDashboard() {
       fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.green2,
       margin: "0 0 14px 0", paddingBottom: 8, borderBottom: `2px solid ${T.sage}`,
     },
+    sectionHeader: {
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 12, marginBottom: 16, paddingBottom: 10,
+      borderBottom: `2px solid ${T.sage}`,
+    },
+    sectionHeaderTitle: {
+      fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.green2, margin: 0,
+    },
     goldBtn: {
       padding: "10px 24px", background: T.gold, color: T.green2, border: "none",
       borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: SANS,
     },
+    breadcrumb: {
+      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+      marginBottom: 18, fontSize: 14, fontFamily: SANS,
+    },
+    breadcrumbLink: {
+      color: T.green1, cursor: "pointer", fontWeight: 600, background: "none",
+      border: "none", padding: 0, fontSize: 14, fontFamily: SANS, textDecoration: "none",
+    },
+    breadcrumbSep: { color: T.sage, fontSize: 13, userSelect: "none" },
+    breadcrumbCurrent: { color: T.green2, fontWeight: 700, fontSize: 14 },
     greenBtn: {
       padding: "10px 24px", background: T.green1, color: T.cream, border: "none",
       borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: SANS,
@@ -522,6 +862,13 @@ export default function CEBMDashboard() {
     footerInner: {
       maxWidth: 1280, margin: "0 auto", display: "flex", alignItems: "center",
       justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+    },
+    input: {
+      padding: "10px 14px", border: `1px solid ${T.sage}`, borderRadius: 8,
+      fontSize: 14, fontFamily: SANS, color: T.green2, background: T.white, width: "100%",
+    },
+    label: {
+      fontSize: 12, fontWeight: 600, color: T.green2, marginBottom: 4, display: "block",
     },
   };
 
@@ -541,24 +888,106 @@ export default function CEBMDashboard() {
           </div>
         </header>
         <main style={{ ...S.main, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
-          <div style={{ ...S.card, maxWidth: 520, textAlign: "center", padding: 48 }}>
+          <div style={{ ...S.card, maxWidth: 580, textAlign: "center", padding: 48 }}>
             <BloomCross size={80} />
             <h2 style={{ fontFamily: SERIF, fontSize: 28, color: T.green2, margin: "20px 0 8px" }}>
               CEBM School Dashboard
             </h2>
             <p style={{ color: T.sage, marginBottom: 28, fontSize: 15 }}>
-              Upload the <strong>CEBM_BSC_100_Schools.xlsx</strong> workbook to begin.
+              Upload a workbook or connect to Zoho to begin.
               <br />
               <span style={{ fontSize: 13 }}>
                 Required sheets: School Register, AE Input, SD Input, TL Input, CS Input
               </span>
             </p>
-            <label style={{ ...S.goldBtn, display: "inline-block", cursor: "pointer" }}>
-              Upload Workbook
-              <input type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} hidden />
-            </label>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+              <label style={{ ...S.goldBtn, display: "inline-block", cursor: "pointer" }}>
+                Upload Workbook
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} hidden />
+              </label>
+              <button style={S.greenBtn} onClick={() => setShowZoho(!showZoho)}>
+                {showZoho ? "Hide Zoho" : "Connect to Zoho"}
+              </button>
+            </div>
+
             {error && (
               <p style={{ color: "#D9534F", marginTop: 16, fontSize: 14 }}>{error}</p>
+            )}
+
+            {/* Zoho Connection Panel */}
+            {showZoho && (
+              <div style={{ marginTop: 28, textAlign: "left", padding: "24px", background: T.sageLight, borderRadius: 12, border: `1px solid ${T.sage}` }}>
+                <h3 style={{ fontFamily: SERIF, fontSize: 18, color: T.green2, marginBottom: 16 }}>
+                  Zoho Database Connection
+                </h3>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={S.label}>Zoho Domain</label>
+                  <select
+                    style={S.input}
+                    value={zohoConfig.domain}
+                    onChange={(e) => setZohoConfig({ ...zohoConfig, domain: e.target.value })}
+                  >
+                    <option value="creator.zoho.com">creator.zoho.com (US)</option>
+                    <option value="creator.zoho.eu">creator.zoho.eu (EU)</option>
+                    <option value="creator.zoho.in">creator.zoho.in (India)</option>
+                    <option value="creator.zoho.com.au">creator.zoho.com.au (AU)</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={S.label}>Application Name *</label>
+                  <input
+                    style={S.input}
+                    placeholder="e.g. cebm-school-data"
+                    value={zohoConfig.appName}
+                    onChange={(e) => setZohoConfig({ ...zohoConfig, appName: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={S.label}>Report Name Prefix (optional)</label>
+                  <input
+                    style={S.input}
+                    placeholder="e.g. BSC_2026 (sheets appended automatically)"
+                    value={zohoConfig.reportName}
+                    onChange={(e) => setZohoConfig({ ...zohoConfig, reportName: e.target.value })}
+                  />
+                  <span style={{ fontSize: 11, color: T.sage }}>
+                    Reports fetched: [prefix]_School_Register, [prefix]_AE_Input, etc.
+                  </span>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={S.label}>OAuth Token *</label>
+                  <input
+                    style={S.input}
+                    type="password"
+                    placeholder="Zoho OAuth token"
+                    value={zohoConfig.authToken}
+                    onChange={(e) => setZohoConfig({ ...zohoConfig, authToken: e.target.value })}
+                  />
+                  <span style={{ fontSize: 11, color: T.sage }}>
+                    Generate at Zoho API Console &rarr; Self Client &rarr; scope: ZohoCreator.report.READ
+                  </span>
+                </div>
+
+                <button
+                  style={{ ...S.goldBtn, width: "100%", opacity: zohoLoading ? 0.6 : 1 }}
+                  onClick={handleZohoImport}
+                  disabled={zohoLoading}
+                >
+                  {zohoLoading ? "Connecting to Zoho..." : "Import from Zoho"}
+                </button>
+
+                {zohoError && (
+                  <p style={{ color: "#D9534F", marginTop: 12, fontSize: 13 }}>{zohoError}</p>
+                )}
+                {zohoSuccess && (
+                  <p style={{ color: T.green1, marginTop: 12, fontSize: 13 }}>{zohoSuccess}</p>
+                )}
+              </div>
             )}
           </div>
         </main>
@@ -581,7 +1010,6 @@ export default function CEBMDashboard() {
   const top10 = schools.slice(0, 10);
   const bottom10 = [...schools].slice(-10).reverse();
 
-  /* ---------- School View Data ---------- */
   const schoolRadar = selectedSchool
     ? PILLAR_KEYS.map((k, i) => ({
         pillar: PILLAR_NAMES[i],
@@ -593,6 +1021,11 @@ export default function CEBMDashboard() {
   const openSchool = (school) => {
     setSelectedSchool(school);
     setView("school");
+  };
+
+  const openAnalysis = (school) => {
+    setSelectedSchool(school);
+    setView("analysis");
   };
 
   /* ---------- Render ---------- */
@@ -609,11 +1042,7 @@ export default function CEBMDashboard() {
             </div>
           </div>
           <nav style={S.nav}>
-            {[
-              ["dashboard", "Dashboard"],
-              ["rankings", "Rankings"],
-              ...(selectedSchool ? [["school", selectedSchool.name]] : []),
-            ].map(([key, label]) => (
+            {[["dashboard", "Dashboard"], ["rankings", "Rankings"]].map(([key, label]) => (
               <button key={key} style={S.navBtn(view === key)} onClick={() => setView(key)}>
                 {label}
               </button>
@@ -623,13 +1052,15 @@ export default function CEBMDashboard() {
       </header>
 
       <main style={S.main}>
+        {/* Breadcrumb trail */}
+        <Breadcrumb view={view} school={selectedSchool} setView={setView} S={S} />
+
         {/* ===== DASHBOARD VIEW ===== */}
         {view === "dashboard" && (
           <>
-            {/* Summary Gauges */}
             <section style={{ marginBottom: 32 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-                <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>System Overview</h2>
+              <div style={S.sectionHeader}>
+                <h2 style={S.sectionHeaderTitle}>System Overview</h2>
                 <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
                   Export Dashboard PDF
                 </button>
@@ -646,7 +1077,6 @@ export default function CEBMDashboard() {
               </div>
             </section>
 
-            {/* Status Distribution + Pillar Performance */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20, marginBottom: 32 }}>
               <div style={S.card}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
@@ -685,7 +1115,6 @@ export default function CEBMDashboard() {
               </div>
             </div>
 
-            {/* Top 10 / Bottom 10 */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20, marginBottom: 32 }}>
               <SchoolMiniTable title="Top 10 Schools" data={top10} S={S} onSelect={openSchool} />
               <SchoolMiniTable title="Bottom 10 Schools" data={bottom10} S={S} onSelect={openSchool} />
@@ -696,8 +1125,8 @@ export default function CEBMDashboard() {
         {/* ===== RANKINGS VIEW ===== */}
         {view === "rankings" && (
           <section>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-              <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>
                 Full Rankings &mdash; {schools.length} Schools
               </h2>
               <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
@@ -708,7 +1137,7 @@ export default function CEBMDashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${T.green1}, ${T.green2})` }}>
-                    {["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"].map((h) => (
+                    {["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status", ""].map((h) => (
                       <th key={h} style={{ padding: "12px 14px", textAlign: "left", color: T.cream, fontFamily: SERIF, fontWeight: 600, letterSpacing: "0.03em" }}>
                         {h}
                       </th>
@@ -732,6 +1161,14 @@ export default function CEBMDashboard() {
                       <td style={{ padding: "10px 14px" }}>
                         <StatusBadge status={s.status} />
                       </td>
+                      <td style={{ padding: "10px 8px" }}>
+                        <button
+                          style={{ ...S.greenBtn, padding: "4px 12px", fontSize: 11 }}
+                          onClick={(e) => { e.stopPropagation(); openAnalysis(s); }}
+                        >
+                          Analyse
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -743,17 +1180,18 @@ export default function CEBMDashboard() {
         {/* ===== SCHOOL VIEW ===== */}
         {view === "school" && selectedSchool && (
           <section>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              <button style={S.greenBtn} onClick={() => setView("rankings")}>
-                &larr; Back to Rankings
-              </button>
-              <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
-                Export School Report PDF
-              </button>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>{selectedSchool.name}</h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button style={{ ...S.greenBtn, padding: "8px 16px", fontSize: 13 }} onClick={() => openAnalysis(selectedSchool)}>
+                  Full Analysis
+                </button>
+                <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
+                  Export School PDF
+                </button>
+              </div>
             </div>
-            <h2 style={S.sectionTitle}>{selectedSchool.name}</h2>
 
-            {/* School meta */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
               <MetaChip label="Rank" value={schools.findIndex((s) => s.id === selectedSchool.id) + 1} />
               <MetaChip label="District" value={selectedSchool.district || "N/A"} />
@@ -762,7 +1200,6 @@ export default function CEBMDashboard() {
               <MetaChip label="Status" value={selectedSchool.status} />
             </div>
 
-            {/* Pillar gauges */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", marginBottom: 28 }}>
               {PILLAR_KEYS.map((k, i) => (
                 <div key={k} style={S.heroCard}>
@@ -771,7 +1208,6 @@ export default function CEBMDashboard() {
               ))}
             </div>
 
-            {/* Radar */}
             <div style={{ ...S.card, maxWidth: 560, margin: "0 auto" }}>
               <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 8 }}>
                 Pillar Radar
@@ -788,6 +1224,200 @@ export default function CEBMDashboard() {
             </div>
           </section>
         )}
+
+        {/* ===== ANALYSIS VIEW ===== */}
+        {view === "analysis" && selectedSchool && schoolAnalysis && (
+          <section>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>
+                Integration Analysis &mdash; {selectedSchool.name}
+              </h2>
+              <button style={S.goldBtn} onClick={() => generateAnalysisPDF(selectedSchool, schoolAnalysis, stats)}>
+                Export Analysis PDF
+              </button>
+            </div>
+
+            {/* Overview Cards */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+              <MetaChip label="Rank" value={`${schoolAnalysis.rank} of ${stats.n}`} />
+              <MetaChip label="Percentile" value={`${schoolAnalysis.percentile}th`} />
+              <MetaChip label="Overall" value={`${selectedSchool.overall.toFixed(1)}%`} />
+              <MetaChip label="System Avg" value={`${stats.avgOverall.toFixed(1)}%`} />
+              <MetaChip label="Variance" value={`${(selectedSchool.overall - stats.avgOverall) >= 0 ? "+" : ""}${(selectedSchool.overall - stats.avgOverall).toFixed(1)}%`} />
+              <MetaChip label="Status" value={selectedSchool.status} />
+            </div>
+
+            {/* Pillar vs System Comparison Chart */}
+            <div style={{ ...S.card, marginBottom: 24 }}>
+              <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
+                Pillar Performance vs System Average
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={schoolAnalysis.pillarComparison.map((p) => ({
+                    pillar: p.name,
+                    School: Number(p.score.toFixed(1)),
+                    System: Number(p.sysAvg.toFixed(1)),
+                  }))}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.sage} opacity={0.3} />
+                  <XAxis dataKey="pillar" tick={{ fill: T.green2, fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: T.green2, fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="School" fill={T.green1} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="System" fill={T.sage} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Pillar detail table */}
+            <div style={{ ...S.card, marginBottom: 24, padding: 0, overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead>
+                  <tr style={{ background: `linear-gradient(135deg, ${T.green1}, ${T.green2})` }}>
+                    {["Pillar", "School Score", "System Avg", "Variance", "Pillar Rank", "Min", "Max"].map((h) => (
+                      <th key={h} style={{ padding: "12px 14px", textAlign: "left", color: T.cream, fontFamily: SERIF, fontWeight: 600 }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {schoolAnalysis.pillarComparison.map((p) => (
+                    <tr key={p.key} style={{ borderBottom: `1px solid ${T.sageLight}` }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 600 }}>{p.name}</td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>{p.score.toFixed(1)}</td>
+                      <td style={{ padding: "10px 14px" }}>{p.sysAvg.toFixed(1)}</td>
+                      <td style={{ padding: "10px 14px", fontWeight: 600, color: p.diff >= 0 ? T.green1 : "#D9534F" }}>
+                        {p.diff >= 0 ? "+" : ""}{p.diff.toFixed(1)}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>{p.pillarRank} of {stats.n}</td>
+                      <td style={{ padding: "10px 14px", color: "#999" }}>{p.min.toFixed(1)}</td>
+                      <td style={{ padding: "10px 14px", color: "#999" }}>{p.max.toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Strengths & Weaknesses */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, marginBottom: 24 }}>
+              <div style={{ ...S.card, borderLeft: `4px solid ${T.green1}` }}>
+                <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
+                  Strengths (Above System Avg)
+                </h3>
+                {schoolAnalysis.strengths.length > 0 ? (
+                  schoolAnalysis.strengths.map((p) => (
+                    <div key={p.key} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${T.sageLight}` }}>
+                      <span style={{ fontWeight: 600 }}>{p.name}</span>
+                      <span style={{ color: T.green1, fontWeight: 700 }}>+{p.diff.toFixed(1)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p style={{ color: T.sage, fontStyle: "italic" }}>No pillars above system average.</p>
+                )}
+              </div>
+              <div style={{ ...S.card, borderLeft: "4px solid #D9534F" }}>
+                <h3 style={{ fontFamily: SERIF, fontSize: 16, color: "#D9534F", marginBottom: 12 }}>
+                  Areas for Development
+                </h3>
+                {schoolAnalysis.weaknesses.length > 0 ? (
+                  schoolAnalysis.weaknesses.map((p) => (
+                    <div key={p.key} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${T.sageLight}` }}>
+                      <span style={{ fontWeight: 600 }}>{p.name}</span>
+                      <span style={{ color: "#D9534F", fontWeight: 700 }}>{p.diff.toFixed(1)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p style={{ color: T.sage, fontStyle: "italic" }}>All pillars above system average.</p>
+                )}
+              </div>
+            </div>
+
+            {/* District Comparison */}
+            {schoolAnalysis.districtAvg !== null && (
+              <div style={{ ...S.card, marginBottom: 24 }}>
+                <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
+                  District Comparison &mdash; {selectedSchool.district}
+                </h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+                  <MetaChip label="District Rank" value={`${schoolAnalysis.districtRank} of ${schoolAnalysis.districtTotal}`} />
+                  <MetaChip label="School Score" value={`${selectedSchool.overall.toFixed(1)}%`} />
+                  <MetaChip label="District Avg" value={`${schoolAnalysis.districtAvg.toFixed(1)}%`} />
+                  <MetaChip label="Variance" value={`${(selectedSchool.overall - schoolAnalysis.districtAvg) >= 0 ? "+" : ""}${(selectedSchool.overall - schoolAnalysis.districtAvg).toFixed(1)}%`} />
+                </div>
+              </div>
+            )}
+
+            {/* KPI-Level Breakdown */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontFamily: SERIF, fontSize: 18, color: T.green2, marginBottom: 16 }}>
+                KPI-Level Breakdown
+              </h3>
+              {schoolAnalysis.kpiBreakdown.map((pillar) => {
+                if (pillar.kpis.length === 0) return null;
+                return (
+                  <div key={pillar.key} style={{ ...S.card, marginBottom: 16, padding: 0, overflowX: "auto" }}>
+                    <h4 style={{
+                      fontFamily: SERIF, fontSize: 15, color: T.green1, padding: "12px 16px",
+                      borderBottom: `1px solid ${T.sageLight}`, margin: 0,
+                      background: T.sageLight,
+                    }}>
+                      {pillar.pillar}
+                    </h4>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: T.sageLight }}>
+                          <th style={{ padding: "8px 14px", textAlign: "left", color: T.green2, fontWeight: 600 }}>KPI</th>
+                          <th style={{ padding: "8px 14px", textAlign: "right", color: T.green2, fontWeight: 600 }}>School</th>
+                          <th style={{ padding: "8px 14px", textAlign: "right", color: T.green2, fontWeight: 600 }}>System Avg</th>
+                          <th style={{ padding: "8px 14px", textAlign: "right", color: T.green2, fontWeight: 600 }}>Variance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pillar.kpis.map((kpi) => (
+                          <tr key={kpi.name} style={{ borderBottom: `1px solid ${T.sageLight}` }}>
+                            <td style={{ padding: "8px 14px" }}>{kpi.name}</td>
+                            <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600 }}>{kpi.score.toFixed(1)}</td>
+                            <td style={{ padding: "8px 14px", textAlign: "right" }}>{kpi.sysAvg.toFixed(1)}</td>
+                            <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600, color: kpi.diff >= 0 ? T.green1 : "#D9534F" }}>
+                              {kpi.diff >= 0 ? "+" : ""}{kpi.diff.toFixed(1)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Radar: School vs System */}
+            <div style={{ ...S.card, maxWidth: 600, margin: "0 auto" }}>
+              <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 8 }}>
+                School vs System Radar
+              </h3>
+              <ResponsiveContainer width="100%" height={340}>
+                <RadarChart data={schoolAnalysis.pillarComparison.map((p) => ({
+                  pillar: p.name,
+                  School: p.score,
+                  System: p.sysAvg,
+                  fullMark: 100,
+                }))}>
+                  <PolarGrid stroke={T.sage} />
+                  <PolarAngleAxis dataKey="pillar" tick={{ fill: T.green2, fontSize: 12 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: T.sage, fontSize: 10 }} />
+                  <Radar name="School" dataKey="School" stroke={T.green1} fill={T.green1} fillOpacity={0.3} />
+                  <Radar name="System" dataKey="System" stroke={T.gold} fill={T.gold} fillOpacity={0.15} />
+                  <Legend />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
       </main>
 
       <Footer S={S} />
@@ -798,6 +1428,40 @@ export default function CEBMDashboard() {
 /* ================================================================
    Sub-components
    ================================================================ */
+function Breadcrumb({ view, school, setView, S }) {
+  const crumbs = [{ label: "Dashboard", key: "dashboard" }];
+
+  if (view === "rankings" || view === "school" || view === "analysis") {
+    crumbs.push({ label: "Rankings", key: "rankings" });
+  }
+  if ((view === "school" || view === "analysis") && school) {
+    crumbs.push({ label: school.name, key: "school" });
+  }
+  if (view === "analysis" && school) {
+    crumbs.push({ label: "Analysis", key: "analysis" });
+  }
+
+  return (
+    <nav style={S.breadcrumb} aria-label="Breadcrumb">
+      {crumbs.map((crumb, i) => {
+        const isLast = i === crumbs.length - 1;
+        return (
+          <span key={crumb.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {i > 0 && <span style={S.breadcrumbSep}>/</span>}
+            {isLast ? (
+              <span style={S.breadcrumbCurrent}>{crumb.label}</span>
+            ) : (
+              <button style={S.breadcrumbLink} onClick={() => setView(crumb.key)}>
+                {crumb.label}
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 function Footer({ S }) {
   return (
     <footer style={S.footer}>
