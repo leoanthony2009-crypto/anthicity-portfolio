@@ -752,6 +752,12 @@ export default function CEBMDashboard() {
           merged.sort((a, b) => b.overall - a.overall);
           return merged;
         });
+        // Refresh selectedSchool if it was updated
+        setSelectedSchool((prev) => {
+          if (!prev) return prev;
+          const updated = parsed.find((s) => s.id === prev.id);
+          return updated || prev;
+        });
         setView("dashboard");
       } catch (err) {
         setError("Failed to parse file: " + err.message);
@@ -766,6 +772,8 @@ export default function CEBMDashboard() {
     setSelectedSchool(null);
     setView("dashboard");
     setError("");
+    setZohoError("");
+    setZohoSuccess("");
   }, []);
 
   /* ---------- Zoho import handler ---------- */
