@@ -992,21 +992,21 @@ export default function CEBMDashboard() {
   if (!schools) {
     return (
       <div style={S.page}>
-        <header style={S.header}>
-          <div style={S.headerInner}>
-            <div style={S.logoGroup}>
+        <header className="cebm-header" style={S.header}>
+          <div className="cebm-header-inner" style={S.headerInner}>
+            <div className="cebm-logo-group" style={S.logoGroup}>
               <BloomCross size={44} />
               <div>
-                <h1 style={S.title}>BLOOM</h1>
-                <p style={S.subtitle}>Catholic Education Balanced Scorecard</p>
+                <h1 className="cebm-title" style={S.title}>BLOOM</h1>
+                <p className="cebm-subtitle" style={S.subtitle}>Catholic Education Balanced Scorecard</p>
               </div>
             </div>
           </div>
         </header>
-        <main style={{ ...S.main, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
-          <div style={{ ...S.card, maxWidth: 580, textAlign: "center", padding: 48 }}>
+        <main className="cebm-main" style={{ ...S.main, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+          <div className="cebm-upload-card" style={{ ...S.card, maxWidth: 580, textAlign: "center", padding: 48 }}>
             <BloomCross size={80} />
-            <h2 style={{ fontFamily: SERIF, fontSize: 28, color: T.green2, margin: "20px 0 8px" }}>
+            <h2 className="cebm-upload-title" style={{ fontFamily: SERIF, fontSize: 28, color: T.green2, margin: "20px 0 8px" }}>
               CEBM School Dashboard
             </h2>
             <p style={{ color: T.sage, marginBottom: 28, fontSize: 15 }}>
@@ -1018,7 +1018,7 @@ export default function CEBMDashboard() {
             </p>
 
             {/* Primary upload button */}
-            <label style={{
+            <label className="cebm-upload-btn" style={{
               ...S.goldBtn, display: "inline-flex", alignItems: "center", gap: 10,
               cursor: "pointer", padding: "14px 32px", fontSize: 17, borderRadius: 10,
               boxShadow: "0 4px 14px rgba(200,151,62,0.3)",
@@ -1047,7 +1047,7 @@ export default function CEBMDashboard() {
 
             {/* Zoho Connection Panel */}
             {showZoho && (
-              <div style={{ marginTop: 28, textAlign: "left", padding: "24px", background: T.sageLight, borderRadius: 12, border: `1px solid ${T.sage}` }}>
+              <div className="cebm-zoho-panel" style={{ marginTop: 28, textAlign: "left", padding: "24px", background: T.sageLight, borderRadius: 12, border: `1px solid ${T.sage}` }}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 18, color: T.green2, marginBottom: 16 }}>
                   Zoho Database Connection
                 </h3>
@@ -1162,16 +1162,16 @@ export default function CEBMDashboard() {
   return (
     <div style={S.page}>
       {/* Header */}
-      <header style={S.header}>
-        <div style={S.headerInner}>
-          <div style={S.logoGroup}>
+      <header className="cebm-header" style={S.header}>
+        <div className="cebm-header-inner" style={S.headerInner}>
+          <div className="cebm-logo-group" style={S.logoGroup}>
             <BloomCross size={44} />
             <div>
-              <h1 style={S.title}>BLOOM</h1>
-              <p style={S.subtitle}>CEBM School Dashboard &mdash; Trinidad &amp; Tobago</p>
+              <h1 className="cebm-title" style={S.title}>BLOOM</h1>
+              <p className="cebm-subtitle" style={S.subtitle}>CEBM School Dashboard &mdash; Trinidad &amp; Tobago</p>
             </div>
           </div>
-          <nav style={S.nav}>
+          <nav className="cebm-nav" style={S.nav}>
             {[["dashboard", "Dashboard"], ["rankings", "Rankings"]].map(([key, label]) => (
               <button key={key} style={S.navBtn(view === key)} onClick={() => setView(key)}>
                 {label}
@@ -1181,7 +1181,7 @@ export default function CEBMDashboard() {
         </div>
       </header>
 
-      <main style={S.main}>
+      <main className="cebm-main" style={S.main}>
         {/* Breadcrumb trail */}
         <Breadcrumb view={view} school={selectedSchool} setView={setView} onHome={goHome} S={S} />
 
@@ -1193,35 +1193,35 @@ export default function CEBMDashboard() {
         {view === "dashboard" && (
           <>
             <section style={{ marginBottom: 32 }}>
-              <div style={S.sectionHeader}>
-                <h2 style={S.sectionHeaderTitle}>System Overview</h2>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <div className="cebm-section-header" style={S.sectionHeader}>
+                <h2 className="cebm-section-header-title" style={S.sectionHeaderTitle}>System Overview</h2>
+                <div className="cebm-section-header-btns" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <label className="cebm-green-btn" style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                     <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M10 2v16M2 10h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
                     </svg>
                     Add School
                     <input type="file" accept=".xlsx,.xls,.csv" onChange={handleSingleUpload} hidden />
                   </label>
-                  <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
+                  <button className="cebm-gold-btn" style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
                     Export Dashboard PDF
                   </button>
                 </div>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
-                <div style={S.heroCard}>
+              <div className="cebm-gauges" style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
+                <div className="cebm-hero-card" style={S.heroCard}>
                   <ScoreGauge value={stats.avgOverall} label="Overall Score" size={140} color={T.cream} />
                 </div>
                 {PILLAR_KEYS.map((k, i) => (
-                  <div key={k} style={S.heroCard}>
+                  <div key={k} className="cebm-hero-card" style={S.heroCard}>
                     <ScoreGauge value={stats.pillarAvgs[i]} label={PILLAR_NAMES[i]} size={120} color={PILLAR_COLORS[i]} />
                   </div>
                 ))}
               </div>
             </section>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20, marginBottom: 32 }}>
-              <div style={S.card}>
+            <div className="cebm-grid-2" style={{ marginBottom: 32 }}>
+              <div className="cebm-card" style={S.card}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
                   Status Distribution
                 </h3>
@@ -1238,7 +1238,7 @@ export default function CEBMDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div style={S.card}>
+              <div className="cebm-card" style={S.card}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
                   Pillar Performance (System Average)
                 </h3>
@@ -1258,7 +1258,7 @@ export default function CEBMDashboard() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20, marginBottom: 32 }}>
+            <div className="cebm-grid-2" style={{ marginBottom: 32 }}>
               <SchoolMiniTable title="Top 10 Schools" data={top10} S={S} onSelect={openSchool} />
               <SchoolMiniTable title="Bottom 10 Schools" data={bottom10} S={S} onSelect={openSchool} />
             </div>
@@ -1268,25 +1268,25 @@ export default function CEBMDashboard() {
         {/* ===== RANKINGS VIEW ===== */}
         {view === "rankings" && (
           <section>
-            <div style={S.sectionHeader}>
-              <h2 style={S.sectionHeaderTitle}>
+            <div className="cebm-section-header" style={S.sectionHeader}>
+              <h2 className="cebm-section-header-title" style={S.sectionHeaderTitle}>
                 Full Rankings &mdash; {schools.length} Schools
               </h2>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <label style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <div className="cebm-section-header-btns" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <label className="cebm-green-btn" style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10 2v16M2 10h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
                   </svg>
                   Add School
                   <input type="file" accept=".xlsx,.xls,.csv" onChange={handleSingleUpload} hidden />
                 </label>
-                <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
+                <button className="cebm-gold-btn" style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
                   Export Rankings PDF
                 </button>
               </div>
             </div>
-            <div style={{ ...S.card, overflowX: "auto", padding: 0 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <div className="cebm-table-wrap" style={{ ...S.card, overflowX: "auto", padding: 0 }}>
+              <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${T.green1}, ${T.green2})` }}>
                     {["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status", ""].map((h) => (
@@ -1332,19 +1332,19 @@ export default function CEBMDashboard() {
         {/* ===== SCHOOL VIEW ===== */}
         {view === "school" && selectedSchool && (
           <section>
-            <div style={S.sectionHeader}>
-              <h2 style={S.sectionHeaderTitle}>{selectedSchool.name}</h2>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={{ ...S.greenBtn, padding: "8px 16px", fontSize: 13 }} onClick={() => openAnalysis(selectedSchool)}>
+            <div className="cebm-section-header" style={S.sectionHeader}>
+              <h2 className="cebm-section-header-title" style={S.sectionHeaderTitle}>{selectedSchool.name}</h2>
+              <div className="cebm-section-header-btns" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="cebm-green-btn" style={{ ...S.greenBtn, padding: "8px 16px", fontSize: 13 }} onClick={() => openAnalysis(selectedSchool)}>
                   Full Analysis
                 </button>
-                <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
+                <button className="cebm-gold-btn" style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
                   Export School PDF
                 </button>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+            <div className="cebm-meta-chips" style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
               <MetaChip label="Rank" value={schools.findIndex((s) => s.id === selectedSchool.id) + 1} />
               <MetaChip label="District" value={selectedSchool.district || "N/A"} />
               <MetaChip label="Type" value={selectedSchool.type || "N/A"} />
@@ -1352,15 +1352,15 @@ export default function CEBMDashboard() {
               <MetaChip label="Status" value={selectedSchool.status} />
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", marginBottom: 28 }}>
+            <div className="cebm-gauges" style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", marginBottom: 28 }}>
               {PILLAR_KEYS.map((k, i) => (
-                <div key={k} style={S.heroCard}>
+                <div key={k} className="cebm-hero-card" style={S.heroCard}>
                   <ScoreGauge value={selectedSchool.pillars[k]} label={PILLAR_NAMES[i]} size={110} color={PILLAR_COLORS[i]} />
                 </div>
               ))}
             </div>
 
-            <div style={{ ...S.card, maxWidth: 560, margin: "0 auto" }}>
+            <div className="cebm-radar-card" style={{ ...S.card, maxWidth: 560, margin: "0 auto" }}>
               <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 8 }}>
                 Pillar Radar
               </h3>
@@ -1380,17 +1380,17 @@ export default function CEBMDashboard() {
         {/* ===== ANALYSIS VIEW ===== */}
         {view === "analysis" && selectedSchool && schoolAnalysis && (
           <section>
-            <div style={S.sectionHeader}>
-              <h2 style={S.sectionHeaderTitle}>
+            <div className="cebm-section-header" style={S.sectionHeader}>
+              <h2 className="cebm-section-header-title" style={S.sectionHeaderTitle}>
                 Integration Analysis &mdash; {selectedSchool.name}
               </h2>
-              <button style={S.goldBtn} onClick={() => generateAnalysisPDF(selectedSchool, schoolAnalysis, stats)}>
+              <button className="cebm-gold-btn" style={S.goldBtn} onClick={() => generateAnalysisPDF(selectedSchool, schoolAnalysis, stats)}>
                 Export Analysis PDF
               </button>
             </div>
 
             {/* Overview Cards */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+            <div className="cebm-meta-chips" style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
               <MetaChip label="Rank" value={`${schoolAnalysis.rank} of ${stats.n}`} />
               <MetaChip label="Percentile" value={`${schoolAnalysis.percentile}th`} />
               <MetaChip label="Overall" value={`${selectedSchool.overall.toFixed(1)}%`} />
@@ -1400,7 +1400,7 @@ export default function CEBMDashboard() {
             </div>
 
             {/* Pillar vs System Comparison Chart */}
-            <div style={{ ...S.card, marginBottom: 24 }}>
+            <div className="cebm-card" style={{ ...S.card, marginBottom: 24 }}>
               <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
                 Pillar Performance vs System Average
               </h3>
@@ -1425,8 +1425,8 @@ export default function CEBMDashboard() {
             </div>
 
             {/* Pillar detail table */}
-            <div style={{ ...S.card, marginBottom: 24, padding: 0, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <div className="cebm-table-wrap" style={{ ...S.card, marginBottom: 24, padding: 0, overflowX: "auto" }}>
+              <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${T.green1}, ${T.green2})` }}>
                     {["Pillar", "School Score", "System Avg", "Variance", "Pillar Rank", "Min", "Max"].map((h) => (
@@ -1455,8 +1455,8 @@ export default function CEBMDashboard() {
             </div>
 
             {/* Strengths & Weaknesses */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, marginBottom: 24 }}>
-              <div style={{ ...S.card, borderLeft: `4px solid ${T.green1}` }}>
+            <div className="cebm-grid-analysis" style={{ marginBottom: 24 }}>
+              <div className="cebm-card" style={{ ...S.card, borderLeft: `4px solid ${T.green1}` }}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
                   Strengths (Above System Avg)
                 </h3>
@@ -1471,7 +1471,7 @@ export default function CEBMDashboard() {
                   <p style={{ color: T.sage, fontStyle: "italic" }}>No pillars above system average.</p>
                 )}
               </div>
-              <div style={{ ...S.card, borderLeft: "4px solid #D9534F" }}>
+              <div className="cebm-card" style={{ ...S.card, borderLeft: "4px solid #D9534F" }}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: "#D9534F", marginBottom: 12 }}>
                   Areas for Development
                 </h3>
@@ -1490,11 +1490,11 @@ export default function CEBMDashboard() {
 
             {/* District Comparison */}
             {schoolAnalysis.districtAvg !== null && (
-              <div style={{ ...S.card, marginBottom: 24 }}>
+              <div className="cebm-card" style={{ ...S.card, marginBottom: 24 }}>
                 <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 12 }}>
                   District Comparison &mdash; {selectedSchool.district}
                 </h3>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+                <div className="cebm-meta-chips" style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
                   <MetaChip label="District Rank" value={`${schoolAnalysis.districtRank} of ${schoolAnalysis.districtTotal}`} />
                   <MetaChip label="School Score" value={`${selectedSchool.overall.toFixed(1)}%`} />
                   <MetaChip label="District Avg" value={`${schoolAnalysis.districtAvg.toFixed(1)}%`} />
@@ -1511,7 +1511,7 @@ export default function CEBMDashboard() {
               {schoolAnalysis.kpiBreakdown.map((pillar) => {
                 if (pillar.kpis.length === 0) return null;
                 return (
-                  <div key={pillar.key} style={{ ...S.card, marginBottom: 16, padding: 0, overflowX: "auto" }}>
+                  <div key={pillar.key} className="cebm-table-wrap" style={{ ...S.card, marginBottom: 16, padding: 0, overflowX: "auto" }}>
                     <h4 style={{
                       fontFamily: SERIF, fontSize: 15, color: T.green1, padding: "12px 16px",
                       borderBottom: `1px solid ${T.sageLight}`, margin: 0,
@@ -1547,7 +1547,7 @@ export default function CEBMDashboard() {
             </div>
 
             {/* Radar: School vs System */}
-            <div style={{ ...S.card, maxWidth: 600, margin: "0 auto" }}>
+            <div className="cebm-radar-card" style={{ ...S.card, maxWidth: 600, margin: "0 auto" }}>
               <h3 style={{ fontFamily: SERIF, fontSize: 16, color: T.green1, marginBottom: 8 }}>
                 School vs System Radar
               </h3>
@@ -1597,7 +1597,7 @@ function Breadcrumb({ view, school, setView, onHome, S }) {
   }
 
   return (
-    <nav style={S.breadcrumb} aria-label="Breadcrumb">
+    <nav className="cebm-breadcrumb" style={S.breadcrumb} aria-label="Breadcrumb">
       {crumbs.map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
         return (
@@ -1628,7 +1628,7 @@ function Breadcrumb({ view, school, setView, onHome, S }) {
 function Footer({ S }) {
   return (
     <footer style={S.footer}>
-      <div style={S.footerInner}>
+      <div className="cebm-footer-inner" style={S.footerInner}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: SERIF, fontSize: 15, color: T.cream, letterSpacing: "0.04em" }}>
           <BloomCross size={28} />
           <span>ANTHICITY &mdash; Learning for Life</span>
@@ -1654,9 +1654,9 @@ function StatusBadge({ status }) {
 
 function MetaChip({ label, value }) {
   return (
-    <div style={{
+    <div className="cebm-meta-chip" style={{
       background: T.sageLight, border: `1px solid ${T.sage}`, borderRadius: 8,
-      padding: "8px 16px", display: "flex", flexDirection: "column", gap: 2,
+      padding: "8px 16px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0,
     }}>
       <span style={{ fontSize: 11, color: T.sage, fontWeight: 600, textTransform: "uppercase" }}>{label}</span>
       <span style={{ fontSize: 16, fontWeight: 700, color: T.green2, fontFamily: SERIF }}>{value}</span>
