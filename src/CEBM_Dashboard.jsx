@@ -348,7 +348,7 @@ function pdfFooter(doc) {
     doc.setFontSize(7);
     doc.setTextColor(143, 174, 139);
     doc.text("ANTHICITY — Learning for Life", 14, 291);
-    doc.text("\u00A9 2026 W. Gopaul", 105, 291, { align: "center" });
+    doc.text("\u00A9 Bloom 2026 W. Gopaul", 105, 291, { align: "center" });
     doc.text(`Page ${i} of ${pages}`, 196, 291, { align: "right" });
   }
 }
@@ -998,7 +998,7 @@ export default function CEBMDashboard() {
               <BloomCross size={44} />
               <div>
                 <h1 style={S.title}>BLOOM</h1>
-                <p style={S.subtitle}>Catholic Education Balanced Metric</p>
+                <p style={S.subtitle}>Catholic Education Balanced Scorecard</p>
               </div>
             </div>
           </div>
@@ -1633,7 +1633,7 @@ function Footer({ S }) {
           <BloomCross size={28} />
           <span>ANTHICITY &mdash; Learning for Life</span>
         </div>
-        <p style={{ fontSize: 13, color: T.sage, margin: 0 }}>&copy; 2026 W. Gopaul. All rights reserved.</p>
+        <p style={{ fontSize: 13, color: T.sage, margin: 0 }}>&copy; Bloom 2026 W. Gopaul. All rights reserved.</p>
       </div>
     </footer>
   );
