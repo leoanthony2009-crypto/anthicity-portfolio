@@ -15,8 +15,10 @@
 | Bundler     | Vite 7                             |
 | Charts      | Recharts 3                         |
 | Excel I/O   | SheetJS (`xlsx` npm package)       |
+| PDF Export  | jsPDF + jspdf-autotable            |
 | Linting     | ESLint 9 with react-hooks & react-refresh plugins |
 | Styling     | Inline styles + one CSS reset file (`index.css`) |
+| Deployment  | Vercel (via `vercel.json` config)  |
 
 ## Repository Structure
 
@@ -27,6 +29,7 @@ anthicity-portfolio/
 ├── index.html              ← Vite HTML entry point
 ├── package.json            ← npm scripts & dependencies
 ├── vite.config.js          ← Vite config (React plugin)
+├── vercel.json             ← Vercel deployment config
 ├── eslint.config.js        ← ESLint flat config
 ├── public/
 │   └── bloom-logo.svg      ← Favicon / brand mark SVG
@@ -34,7 +37,7 @@ anthicity-portfolio/
     ├── main.jsx            ← React DOM entry point
     ├── index.css           ← Global CSS reset & scrollbar styles
     ├── App.jsx             ← Thin wrapper — renders <CEBMDashboard />
-    └── CEBM_Dashboard.jsx  ← Core component (~500 lines, single file)
+    └── CEBM_Dashboard.jsx  ← Core component (single file, all features)
 ```
 
 ## Key File: `src/CEBM_Dashboard.jsx`
@@ -50,6 +53,10 @@ This single-file component contains **everything**:
   - `"SD Input"` — Student Development KPI scores
   - `"TL Input"` — Teaching & Learning KPI scores
   - `"CS Input"` — Catholic School Identity KPI scores
+- **PDF generators** — 3 branded report functions:
+  - `generateDashboardPDF()` — system overview with summary stats, status distribution, top 10, bottom 10
+  - `generateRankingsPDF()` — full rankings table for all schools
+  - `generateSchoolPDF()` — individual school report card with pillar breakdown and visual score bars
 - **3 views:**
   1. **Dashboard** — system overview gauges, status pie chart, pillar bar chart, top/bottom 10 tables
   2. **Rankings** — full sortable table of all schools
@@ -65,6 +72,21 @@ User uploads .xlsx → FileReader → XLSX.read() → parseWorkbook()
   → sorts by overall score descending → renders charts/tables
 ```
 
+### PDF Export Flow
+
+```
+User clicks "Export PDF" → generateXxxPDF(data)
+  → jsPDF creates document → pdfHeader() draws branded green header band
+  → autoTable() renders data tables with BLOOM styling
+  → pdfFooter() adds branded footer with page numbers → doc.save()
+```
+
+All PDF reports include:
+- Green gradient header with BLOOM brand name
+- Date stamp and report title
+- `jspdf-autotable` tables with green header / sage-light alternating rows
+- Branded footer with "ANTHICITY — Learning for Life", copyright, page numbers
+
 ## Brand Design Tokens
 
 | Token         | Value     | Usage                              |
@@ -79,6 +101,7 @@ User uploads .xlsx → FileReader → XLSX.read() → parseWorkbook()
 **Fonts:**
 - Headings: `EB Garamond` (Google Fonts), fallback `Georgia`, `Palatino Linotype`, `Palatino`, `serif`
 - Body: `Segoe UI`, `system-ui`, `-apple-system`, `sans-serif`
+- PDFs: `helvetica` (built-in jsPDF font)
 
 ## Commands
 
@@ -112,6 +135,12 @@ npm run lint         # Run ESLint
 - Column names are flexibly matched: the parser checks for `"School ID"`, `"SchoolID"`, and `"school_id"` variants
 - All parsing is client-side — no server upload
 
+### PDF Generation
+- Import `jsPDF` from `"jspdf"` and `"jspdf-autotable"` (side-effect import)
+- Use `pdfHeader()` and `pdfFooter()` helpers for consistent branded layout across all reports
+- Header colors use RGB arrays matching `T` tokens: `[58,125,92]` for green1, `[27,67,50]` for green2
+- Tables use `doc.autoTable()` with theme `"grid"`, green head styles, sage-light alternating rows
+
 ### Naming
 - Component files: `PascalCase.jsx` (exception: `CEBM_Dashboard.jsx` uses underscore per project convention)
 - Exported component functions: `PascalCase`
@@ -120,9 +149,17 @@ npm run lint         # Run ESLint
 
 ## Deployment
 
-The app builds to a static `dist/` folder deployable anywhere:
+The app builds to a static `dist/` folder deployable anywhere.
 
-- **Vercel:** `npx vercel --prod`
+### Vercel (primary)
+
+A `vercel.json` config is included. To deploy:
+
+1. **Via GitHub integration (recommended):** Connect the repo at [vercel.com/new](https://vercel.com/new) — Vercel auto-detects Vite and deploys on push.
+2. **Via CLI:** `npx vercel --prod` (requires `vercel login` first).
+
+### Other hosts
+
 - **Netlify:** drag `dist/` folder to Netlify deploy UI
 - **GitHub Pages / any static host:** serve `dist/` contents
 
@@ -133,7 +170,8 @@ No environment variables or server config required.
 1. **New chart type:** Add to the existing `CEBM_Dashboard.jsx` in the appropriate view section. Import from `recharts`. Use `T` tokens for colors.
 2. **New KPI pillar:** Add key to `PILLAR_KEYS`, name to `PILLAR_NAMES`, add sheet name in `parseWorkbook()`, and extend the `pillars` object. Update the overall average calculation divisor.
 3. **New view/tab:** Add to the nav button array, add a `view === "newview"` conditional render block in the main return.
-4. **Externalizing styles:** If the single-file grows too large, extract a `CEBM_Dashboard.css` and replace inline `style` attributes with className references. Maintain the `cebm-` prefix convention.
+4. **New PDF report:** Create a `generateXxxPDF()` function following the same pattern: use `pdfHeader()`, `doc.autoTable()`, and `pdfFooter()`.
+5. **Externalizing styles:** If the single-file grows too large, extract a `CEBM_Dashboard.css` and replace inline `style` attributes with className references. Maintain the `cebm-` prefix convention.
 
 ## Important Notes
 

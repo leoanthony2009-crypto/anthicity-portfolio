@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer,
@@ -143,6 +145,284 @@ function parseWorkbook(wb) {
 
   schools.sort((a, b) => b.overall - a.overall);
   return schools;
+}
+
+/* ================================================================
+   PDF Report Generation
+   ================================================================ */
+function pdfHeader(doc, title) {
+  // Green gradient header band
+  doc.setFillColor(58, 125, 92); // T.green1
+  doc.rect(0, 0, 210, 32, "F");
+  doc.setFillColor(27, 67, 50); // T.green2
+  doc.rect(0, 28, 210, 4, "F");
+
+  // Brand name
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(245, 239, 224); // T.cream
+  doc.text("BLOOM", 14, 16);
+
+  // Subtitle
+  doc.setFontSize(9);
+  doc.setTextColor(143, 174, 139); // T.sage
+  doc.text("CEBM School Dashboard — Trinidad & Tobago", 14, 24);
+
+  // Title + date on right
+  doc.setFontSize(10);
+  doc.setTextColor(245, 239, 224);
+  doc.text(title, 196, 16, { align: "right" });
+  doc.setFontSize(8);
+  doc.text(new Date().toLocaleDateString("en-TT", { year: "numeric", month: "long", day: "numeric" }), 196, 22, { align: "right" });
+
+  return 40; // y-offset after header
+}
+
+function pdfFooter(doc) {
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(27, 67, 50);
+    doc.rect(0, 285, 210, 12, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(143, 174, 139);
+    doc.text("ANTHICITY — Learning for Life", 14, 291);
+    doc.text(`© 2026 W. Gopaul`, 105, 291, { align: "center" });
+    doc.text(`Page ${i} of ${pages}`, 196, 291, { align: "right" });
+  }
+}
+
+function generateDashboardPDF(schools, stats) {
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, "System Overview Report");
+
+  // Summary stats
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(27, 67, 50);
+  doc.text("System Summary", 14, y);
+  y += 8;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(58, 125, 92);
+  const summaryItems = [
+    `Total Schools: ${stats.n}`,
+    `Overall Average: ${stats.avgOverall.toFixed(1)}%`,
+    ...PILLAR_KEYS.map((k, i) => `${PILLAR_NAMES[i]}: ${stats.pillarAvgs[i].toFixed(1)}%`),
+  ];
+  summaryItems.forEach((item) => {
+    doc.text(item, 14, y);
+    y += 6;
+  });
+  y += 4;
+
+  // Status distribution
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Status Distribution", 14, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    head: [["Status", "Count", "Percentage"]],
+    body: STATUS_LABELS.map((label, i) => [
+      label,
+      stats.statusCounts[i],
+      `${((stats.statusCounts[i] / stats.n) * 100).toFixed(1)}%`,
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [237, 244, 235] },
+    styles: { fontSize: 9 },
+    margin: { left: 14, right: 14 },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // Top 10
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Top 10 Schools", 14, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
+    body: schools.slice(0, 10).map((s, i) => [
+      i + 1, s.name, s.district,
+      s.pillars.AE.toFixed(1), s.pillars.SD.toFixed(1),
+      s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
+      s.overall.toFixed(1), s.status,
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [237, 244, 235] },
+    styles: { fontSize: 8 },
+    margin: { left: 14, right: 14 },
+  });
+
+  // Bottom 10 on new page
+  doc.addPage();
+  y = pdfHeader(doc, "System Overview Report");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Bottom 10 Schools", 14, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
+    body: [...schools].slice(-10).reverse().map((s) => [
+      schools.indexOf(s) + 1, s.name, s.district,
+      s.pillars.AE.toFixed(1), s.pillars.SD.toFixed(1),
+      s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
+      s.overall.toFixed(1), s.status,
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [237, 244, 235] },
+    styles: { fontSize: 8 },
+    margin: { left: 14, right: 14 },
+  });
+
+  pdfFooter(doc);
+  doc.save("CEBM_Dashboard_Overview.pdf");
+}
+
+function generateRankingsPDF(schools) {
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, "Full Rankings Report");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text(`Full Rankings — ${schools.length} Schools`, 14, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    head: [["Rank", "School", "District", "AE", "SD", "TL", "CS", "Overall", "Status"]],
+    body: schools.map((s, i) => [
+      i + 1, s.name, s.district,
+      s.pillars.AE.toFixed(1), s.pillars.SD.toFixed(1),
+      s.pillars.TL.toFixed(1), s.pillars.CS.toFixed(1),
+      s.overall.toFixed(1), s.status,
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [237, 244, 235] },
+    styles: { fontSize: 7, cellPadding: 2 },
+    margin: { left: 14, right: 14 },
+    didDrawPage: () => {
+      pdfHeader(doc, "Full Rankings Report");
+    },
+  });
+
+  pdfFooter(doc);
+  doc.save("CEBM_Full_Rankings.pdf");
+}
+
+function generateSchoolPDF(school, rank) {
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, "School Report Card");
+
+  // School name
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(27, 67, 50);
+  doc.text(school.name, 14, y);
+  y += 10;
+
+  // Meta info
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(58, 125, 92);
+  const meta = [
+    ["Rank", `${rank} of 100`],
+    ["District", school.district || "N/A"],
+    ["Type", school.type || "N/A"],
+    ["Overall Score", `${school.overall.toFixed(1)}%`],
+    ["Status", school.status],
+  ];
+  meta.forEach(([label, value]) => {
+    doc.setFont("helvetica", "bold");
+    doc.text(`${label}: `, 14, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(value, 14 + doc.getTextWidth(`${label}: `), y);
+    y += 6;
+  });
+  y += 6;
+
+  // Pillar scores table
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Pillar Performance", 14, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    head: [["Pillar", "Score (%)", "Rating"]],
+    body: PILLAR_KEYS.map((k, i) => {
+      const score = school.pillars[k];
+      const rating = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Developing" : "Needs Support";
+      return [PILLAR_NAMES[i], score.toFixed(1), rating];
+    }),
+    theme: "grid",
+    headStyles: { fillColor: [58, 125, 92], textColor: [245, 239, 224], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [237, 244, 235] },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // Overall summary box
+  doc.setFillColor(237, 244, 235);
+  doc.roundedRect(14, y, 182, 24, 4, 4, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(27, 67, 50);
+  doc.text(`Overall Score: ${school.overall.toFixed(1)}%`, 105, y + 10, { align: "center" });
+  doc.setFontSize(11);
+  doc.setTextColor(58, 125, 92);
+  doc.text(`Status: ${school.status}`, 105, y + 18, { align: "center" });
+
+  // Pillar visual bars
+  y += 34;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(27, 67, 50);
+  doc.text("Score Breakdown", 14, y);
+  y += 8;
+
+  const barColors = [[58, 125, 92], [200, 151, 62], [91, 154, 122], [212, 168, 83]];
+  PILLAR_KEYS.forEach((k, i) => {
+    const score = school.pillars[k];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(27, 67, 50);
+    doc.text(PILLAR_NAMES[i], 14, y);
+
+    // Bar background
+    doc.setFillColor(237, 244, 235);
+    doc.roundedRect(70, y - 4, 110, 6, 2, 2, "F");
+
+    // Bar fill
+    const [r, g, b] = barColors[i];
+    doc.setFillColor(r, g, b);
+    doc.roundedRect(70, y - 4, (score / 100) * 110, 6, 2, 2, "F");
+
+    // Score label
+    doc.text(`${score.toFixed(1)}%`, 184, y, { align: "right" });
+    y += 10;
+  });
+
+  pdfFooter(doc);
+  doc.save(`CEBM_${school.name.replace(/[^a-zA-Z0-9]/g, "_")}_Report.pdf`);
 }
 
 /* ================================================================
@@ -348,7 +628,12 @@ export default function CEBMDashboard() {
           <>
             {/* Summary Gauges */}
             <section style={{ marginBottom: 32 }}>
-              <h2 style={S.sectionTitle}>System Overview</h2>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>System Overview</h2>
+                <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
+                  Export Dashboard PDF
+                </button>
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
                 <div style={S.heroCard}>
                   <ScoreGauge value={stats.avgOverall} label="Overall Score" size={140} color={T.cream} />
@@ -411,7 +696,14 @@ export default function CEBMDashboard() {
         {/* ===== RANKINGS VIEW ===== */}
         {view === "rankings" && (
           <section>
-            <h2 style={S.sectionTitle}>Full Rankings &mdash; {schools.length} Schools</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>
+                Full Rankings &mdash; {schools.length} Schools
+              </h2>
+              <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
+                Export Rankings PDF
+              </button>
+            </div>
             <div style={{ ...S.card, overflowX: "auto", padding: 0 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
@@ -451,9 +743,14 @@ export default function CEBMDashboard() {
         {/* ===== SCHOOL VIEW ===== */}
         {view === "school" && selectedSchool && (
           <section>
-            <button style={{ ...S.greenBtn, marginBottom: 20 }} onClick={() => setView("rankings")}>
-              &larr; Back to Rankings
-            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <button style={S.greenBtn} onClick={() => setView("rankings")}>
+                &larr; Back to Rankings
+              </button>
+              <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
+                Export School Report PDF
+              </button>
+            </div>
             <h2 style={S.sectionTitle}>{selectedSchool.name}</h2>
 
             {/* School meta */}
