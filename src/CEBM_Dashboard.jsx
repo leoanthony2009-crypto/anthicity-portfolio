@@ -720,6 +720,54 @@ export default function CEBMDashboard() {
     reader.readAsBinaryString(file);
   }, []);
 
+  /* ---------- Single school upload handler (merges into existing data) ---------- */
+  const handleSingleUpload = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: "binary" });
+        const parsed = parseWorkbook(wb);
+        if (parsed.length === 0) {
+          setError("No school data found in uploaded file.");
+          return;
+        }
+        setSchools((prev) => {
+          const existing = prev || [];
+          const existingIds = new Set(existing.map((s) => s.id));
+          const newSchools = [];
+          const updatedExisting = [...existing];
+          parsed.forEach((school) => {
+            if (existingIds.has(school.id)) {
+              const idx = updatedExisting.findIndex((s) => s.id === school.id);
+              if (idx !== -1) updatedExisting[idx] = school;
+            } else {
+              newSchools.push(school);
+            }
+          });
+          const merged = [...updatedExisting, ...newSchools];
+          merged.sort((a, b) => b.overall - a.overall);
+          return merged;
+        });
+        setView("dashboard");
+      } catch (err) {
+        setError("Failed to parse file: " + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  }, []);
+
+  /* ---------- Go Home (back to upload screen) ---------- */
+  const goHome = useCallback(() => {
+    setSchools(null);
+    setSelectedSchool(null);
+    setView("dashboard");
+    setError("");
+  }, []);
+
   /* ---------- Zoho import handler ---------- */
   const handleZohoImport = useCallback(async () => {
     if (!zohoConfig.appName || !zohoConfig.authToken) {
@@ -1053,7 +1101,11 @@ export default function CEBMDashboard() {
 
       <main style={S.main}>
         {/* Breadcrumb trail */}
-        <Breadcrumb view={view} school={selectedSchool} setView={setView} S={S} />
+        <Breadcrumb view={view} school={selectedSchool} setView={setView} onHome={goHome} S={S} />
+
+        {error && (
+          <p style={{ color: "#D9534F", fontSize: 14, marginBottom: 12 }}>{error}</p>
+        )}
 
         {/* ===== DASHBOARD VIEW ===== */}
         {view === "dashboard" && (
@@ -1061,9 +1113,18 @@ export default function CEBMDashboard() {
             <section style={{ marginBottom: 32 }}>
               <div style={S.sectionHeader}>
                 <h2 style={S.sectionHeaderTitle}>System Overview</h2>
-                <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
-                  Export Dashboard PDF
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <label style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10 2v16M2 10h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                    </svg>
+                    Add School
+                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleSingleUpload} hidden />
+                  </label>
+                  <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
+                    Export Dashboard PDF
+                  </button>
+                </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
                 <div style={S.heroCard}>
@@ -1129,9 +1190,18 @@ export default function CEBMDashboard() {
               <h2 style={S.sectionHeaderTitle}>
                 Full Rankings &mdash; {schools.length} Schools
               </h2>
-              <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
-                Export Rankings PDF
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <label style={{ ...S.greenBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 2v16M2 10h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  </svg>
+                  Add School
+                  <input type="file" accept=".xlsx,.xls,.csv" onChange={handleSingleUpload} hidden />
+                </label>
+                <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
+                  Export Rankings PDF
+                </button>
+              </div>
             </div>
             <div style={{ ...S.card, overflowX: "auto", padding: 0 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -1428,8 +1498,11 @@ export default function CEBMDashboard() {
 /* ================================================================
    Sub-components
    ================================================================ */
-function Breadcrumb({ view, school, setView, S }) {
-  const crumbs = [{ label: "Dashboard", key: "dashboard" }];
+function Breadcrumb({ view, school, setView, onHome, S }) {
+  const crumbs = [
+    { label: "Home", key: "home", action: onHome },
+    { label: "Dashboard", key: "dashboard" },
+  ];
 
   if (view === "rankings" || view === "school" || view === "analysis") {
     crumbs.push({ label: "Rankings", key: "rankings" });
@@ -1451,7 +1524,15 @@ function Breadcrumb({ view, school, setView, S }) {
             {isLast ? (
               <span style={S.breadcrumbCurrent}>{crumb.label}</span>
             ) : (
-              <button style={S.breadcrumbLink} onClick={() => setView(crumb.key)}>
+              <button
+                style={S.breadcrumbLink}
+                onClick={() => crumb.action ? crumb.action() : setView(crumb.key)}
+              >
+                {crumb.key === "home" && (
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" style={{ verticalAlign: "middle", marginRight: 3 }}>
+                    <path d="M10 2L2 9h3v7h4v-5h2v5h4V9h3L10 2z" />
+                  </svg>
+                )}
                 {crumb.label}
               </button>
             )}
