@@ -841,6 +841,16 @@ export default function CEBMDashboard() {
       padding: "10px 24px", background: T.gold, color: T.green2, border: "none",
       borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: SANS,
     },
+    breadcrumb: {
+      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+      marginBottom: 18, fontSize: 14, fontFamily: SANS,
+    },
+    breadcrumbLink: {
+      color: T.green1, cursor: "pointer", fontWeight: 600, background: "none",
+      border: "none", padding: 0, fontSize: 14, fontFamily: SANS, textDecoration: "none",
+    },
+    breadcrumbSep: { color: T.sage, fontSize: 13, userSelect: "none" },
+    breadcrumbCurrent: { color: T.green2, fontWeight: 700, fontSize: 14 },
     greenBtn: {
       padding: "10px 24px", background: T.green1, color: T.cream, border: "none",
       borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: SANS,
@@ -1032,12 +1042,7 @@ export default function CEBMDashboard() {
             </div>
           </div>
           <nav style={S.nav}>
-            {[
-              ["dashboard", "Dashboard"],
-              ["rankings", "Rankings"],
-              ...(selectedSchool ? [["school", "School"]] : []),
-              ...(selectedSchool ? [["analysis", "Analysis"]] : []),
-            ].map(([key, label]) => (
+            {[["dashboard", "Dashboard"], ["rankings", "Rankings"]].map(([key, label]) => (
               <button key={key} style={S.navBtn(view === key)} onClick={() => setView(key)}>
                 {label}
               </button>
@@ -1047,6 +1052,9 @@ export default function CEBMDashboard() {
       </header>
 
       <main style={S.main}>
+        {/* Breadcrumb trail */}
+        <Breadcrumb view={view} school={selectedSchool} setView={setView} S={S} />
+
         {/* ===== DASHBOARD VIEW ===== */}
         {view === "dashboard" && (
           <>
@@ -1172,19 +1180,16 @@ export default function CEBMDashboard() {
         {/* ===== SCHOOL VIEW ===== */}
         {view === "school" && selectedSchool && (
           <section>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-              <button style={S.greenBtn} onClick={() => setView("rankings")}>
-                &larr; Rankings
-              </button>
-              <button style={{ ...S.greenBtn, background: "#5B9A7A" }} onClick={() => openAnalysis(selectedSchool)}>
-                Full Analysis
-              </button>
-            </div>
             <div style={S.sectionHeader}>
               <h2 style={S.sectionHeaderTitle}>{selectedSchool.name}</h2>
-              <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
-                Export School PDF
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button style={{ ...S.greenBtn, padding: "8px 16px", fontSize: 13 }} onClick={() => openAnalysis(selectedSchool)}>
+                  Full Analysis
+                </button>
+                <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
+                  Export School PDF
+                </button>
+              </div>
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
@@ -1223,14 +1228,6 @@ export default function CEBMDashboard() {
         {/* ===== ANALYSIS VIEW ===== */}
         {view === "analysis" && selectedSchool && schoolAnalysis && (
           <section>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-              <button style={S.greenBtn} onClick={() => setView("school")}>
-                &larr; School
-              </button>
-              <button style={S.greenBtn} onClick={() => setView("rankings")}>
-                Rankings
-              </button>
-            </div>
             <div style={S.sectionHeader}>
               <h2 style={S.sectionHeaderTitle}>
                 Integration Analysis &mdash; {selectedSchool.name}
@@ -1431,6 +1428,40 @@ export default function CEBMDashboard() {
 /* ================================================================
    Sub-components
    ================================================================ */
+function Breadcrumb({ view, school, setView, S }) {
+  const crumbs = [{ label: "Dashboard", key: "dashboard" }];
+
+  if (view === "rankings" || view === "school" || view === "analysis") {
+    crumbs.push({ label: "Rankings", key: "rankings" });
+  }
+  if ((view === "school" || view === "analysis") && school) {
+    crumbs.push({ label: school.name, key: "school" });
+  }
+  if (view === "analysis" && school) {
+    crumbs.push({ label: "Analysis", key: "analysis" });
+  }
+
+  return (
+    <nav style={S.breadcrumb} aria-label="Breadcrumb">
+      {crumbs.map((crumb, i) => {
+        const isLast = i === crumbs.length - 1;
+        return (
+          <span key={crumb.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {i > 0 && <span style={S.breadcrumbSep}>/</span>}
+            {isLast ? (
+              <span style={S.breadcrumbCurrent}>{crumb.label}</span>
+            ) : (
+              <button style={S.breadcrumbLink} onClick={() => setView(crumb.key)}>
+                {crumb.label}
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 function Footer({ S }) {
   return (
     <footer style={S.footer}>
