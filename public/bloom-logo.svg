@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- BLOOM Cross Logo -->
+  <g transform="translate(32,32)">
+    <!-- Vertical bar of cross -->
+    <rect x="-4" y="-24" width="8" height="48" rx="2" fill="#3A7D5C"/>
+    <!-- Horizontal bar of cross -->
+    <rect x="-16" y="-4" width="32" height="8" rx="2" fill="#3A7D5C"/>
+    <!-- Top bloom petal -->
+    <ellipse cx="0" cy="-22" rx="6" ry="10" fill="#8FAE8B" opacity="0.8"/>
+    <!-- Bottom bloom petal -->
+    <ellipse cx="0" cy="22" rx="6" ry="10" fill="#8FAE8B" opacity="0.8"/>
+    <!-- Left bloom petal -->
+    <ellipse cx="-14" cy="0" rx="10" ry="6" fill="#8FAE8B" opacity="0.8"/>
+    <!-- Right bloom petal -->
+    <ellipse cx="14" cy="0" rx="10" ry="6" fill="#8FAE8B" opacity="0.8"/>
+    <!-- Center bloom -->
+    <circle cx="0" cy="0" r="5" fill="#C8973E"/>
+    <!-- Inner cross detail -->
+    <rect x="-1.5" y="-8" width="3" height="16" rx="1" fill="#F5EFE0" opacity="0.5"/>
+    <rect x="-8" y="-1.5" width="16" height="3" rx="1" fill="#F5EFE0" opacity="0.5"/>
+  </g>
+</svg>
