@@ -55,17 +55,25 @@ function ScoreGauge({ value, label, size = 120, color = T.green1 }) {
   const pct = Math.min(Math.max(value, 0), 100);
   const offset = c - (pct / 100) * c;
   return (
-    <div style={{ textAlign: "center" }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.sageLight} strokeWidth="10" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
-          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-      </svg>
-      <div style={{ marginTop: -size / 2 - 14, fontFamily: SERIF, fontSize: size * 0.25, fontWeight: 700, color: T.green2 }}>
-        {pct.toFixed(1)}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <div style={{ position: "relative", width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.sageLight} strokeWidth="10" />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
+            strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+        </svg>
+        <div style={{
+          position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: SERIF, fontSize: size * 0.24, fontWeight: 700, color: T.cream,
+        }}>
+          {pct.toFixed(1)}
+        </div>
       </div>
-      <div style={{ marginTop: size * 0.13, fontSize: 13, color: T.sage, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 13, color: T.sage, fontWeight: 600, textAlign: "center", lineHeight: 1.2, maxWidth: size + 20 }}>
+        {label}
+      </div>
     </div>
   );
 }
@@ -125,11 +133,20 @@ function parseWorkbook(wb) {
   const tl = kpiMap(tlRows);
   const cs = kpiMap(csRows);
 
-  const schools = register.map((r) => {
-    const id = r["School ID"] ?? r["SchoolID"] ?? r["school_id"] ?? r["ID"];
-    const name = r["School Name"] ?? r["SchoolName"] ?? r["school_name"] ?? r["Name"] ?? `School ${id}`;
-    const district = r["District"] ?? r["district"] ?? r["Region"] ?? "";
-    const type = r["Type"] ?? r["type"] ?? r["Category"] ?? "";
+  const schools = register.map((r, idx) => {
+    // Flexible column matching — try common variants, then fall back to first column value
+    const keys = Object.keys(r);
+    const findCol = (...names) => {
+      for (const n of names) {
+        if (r[n] != null) return r[n];
+      }
+      return undefined;
+    };
+
+    const id = findCol("School ID", "SchoolID", "school_id", "ID", "id") ?? (keys[0] ? r[keys[0]] : idx + 1);
+    const name = findCol("School Name", "SchoolName", "school_name", "Name", "name") ?? `School ${id}`;
+    const district = findCol("District", "district", "Region", "region") ?? "";
+    const type = findCol("Type", "type", "Category", "category") ?? "";
 
     const pillars = {
       AE: ae[id]?.avg ?? 0,
@@ -812,6 +829,14 @@ export default function CEBMDashboard() {
       fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.green2,
       margin: "0 0 14px 0", paddingBottom: 8, borderBottom: `2px solid ${T.sage}`,
     },
+    sectionHeader: {
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 12, marginBottom: 16, paddingBottom: 10,
+      borderBottom: `2px solid ${T.sage}`,
+    },
+    sectionHeaderTitle: {
+      fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.green2, margin: 0,
+    },
     goldBtn: {
       padding: "10px 24px", background: T.gold, color: T.green2, border: "none",
       borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: SANS,
@@ -1026,8 +1051,8 @@ export default function CEBMDashboard() {
         {view === "dashboard" && (
           <>
             <section style={{ marginBottom: 32 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-                <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>System Overview</h2>
+              <div style={S.sectionHeader}>
+                <h2 style={S.sectionHeaderTitle}>System Overview</h2>
                 <button style={S.goldBtn} onClick={() => generateDashboardPDF(schools, stats)}>
                   Export Dashboard PDF
                 </button>
@@ -1092,8 +1117,8 @@ export default function CEBMDashboard() {
         {/* ===== RANKINGS VIEW ===== */}
         {view === "rankings" && (
           <section>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-              <h2 style={{ ...S.sectionTitle, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>
                 Full Rankings &mdash; {schools.length} Schools
               </h2>
               <button style={S.goldBtn} onClick={() => generateRankingsPDF(schools)}>
@@ -1147,20 +1172,20 @@ export default function CEBMDashboard() {
         {/* ===== SCHOOL VIEW ===== */}
         {view === "school" && selectedSchool && (
           <section>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={S.greenBtn} onClick={() => setView("rankings")}>
-                  &larr; Back to Rankings
-                </button>
-                <button style={{ ...S.greenBtn, background: "#5B9A7A" }} onClick={() => openAnalysis(selectedSchool)}>
-                  Full Analysis
-                </button>
-              </div>
-              <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
-                Export School Report PDF
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+              <button style={S.greenBtn} onClick={() => setView("rankings")}>
+                &larr; Rankings
+              </button>
+              <button style={{ ...S.greenBtn, background: "#5B9A7A" }} onClick={() => openAnalysis(selectedSchool)}>
+                Full Analysis
               </button>
             </div>
-            <h2 style={S.sectionTitle}>{selectedSchool.name}</h2>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>{selectedSchool.name}</h2>
+              <button style={S.goldBtn} onClick={() => generateSchoolPDF(selectedSchool, schools.findIndex((s) => s.id === selectedSchool.id) + 1)}>
+                Export School PDF
+              </button>
+            </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
               <MetaChip label="Rank" value={schools.findIndex((s) => s.id === selectedSchool.id) + 1} />
@@ -1198,23 +1223,22 @@ export default function CEBMDashboard() {
         {/* ===== ANALYSIS VIEW ===== */}
         {view === "analysis" && selectedSchool && schoolAnalysis && (
           <section>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={S.greenBtn} onClick={() => setView("school")}>
-                  &larr; Back to School
-                </button>
-                <button style={S.greenBtn} onClick={() => setView("rankings")}>
-                  Rankings
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+              <button style={S.greenBtn} onClick={() => setView("school")}>
+                &larr; School
+              </button>
+              <button style={S.greenBtn} onClick={() => setView("rankings")}>
+                Rankings
+              </button>
+            </div>
+            <div style={S.sectionHeader}>
+              <h2 style={S.sectionHeaderTitle}>
+                Integration Analysis &mdash; {selectedSchool.name}
+              </h2>
               <button style={S.goldBtn} onClick={() => generateAnalysisPDF(selectedSchool, schoolAnalysis, stats)}>
                 Export Analysis PDF
               </button>
             </div>
-
-            <h2 style={S.sectionTitle}>
-              Integration Analysis &mdash; {selectedSchool.name}
-            </h2>
 
             {/* Overview Cards */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
