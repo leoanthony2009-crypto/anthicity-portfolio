@@ -176,6 +176,59 @@ function parseWorkbook(wb) {
 }
 
 /* ================================================================
+   Sample Data — 3 Example Schools
+   ================================================================ */
+function generateSampleSchools() {
+  return [
+    {
+      id: "SCH001",
+      name: "Holy Name Convent — Port of Spain",
+      district: "Port of Spain & Environs",
+      type: "Secondary",
+      pillars: { AE: 82.5, SD: 78.3, TL: 85.1, CS: 88.0 },
+      kpiDetail: {
+        AE: { "Literacy Rate": 88, "Numeracy Rate": 79, "SEA Pass Rate": 84, "CSEC 5+": 78, "Value Added": 83 },
+        SD: { "Attendance Rate": 82, "Co-Curricular": 74, "Leadership Programmes": 76, "Student Wellbeing": 81 },
+        TL: { "Teacher Qualifications": 90, "Lesson Quality": 82, "Professional Dev": 84, "Differentiation": 84 },
+        CS: { "Faith Formation": 91, "Sacramental Life": 86, "Service Learning": 85, "Catholic Ethos": 90 },
+      },
+      overall: (82.5 + 78.3 + 85.1 + 88.0) / 4,
+      status: "Excellent",
+    },
+    {
+      id: "SCH002",
+      name: "Presentation College — Chaguanas",
+      district: "Caroni",
+      type: "Secondary",
+      pillars: { AE: 68.2, SD: 62.7, TL: 70.4, CS: 65.0 },
+      kpiDetail: {
+        AE: { "Literacy Rate": 72, "Numeracy Rate": 64, "SEA Pass Rate": 70, "CSEC 5+": 62, "Value Added": 73 },
+        SD: { "Attendance Rate": 68, "Co-Curricular": 58, "Leadership Programmes": 60, "Student Wellbeing": 65 },
+        TL: { "Teacher Qualifications": 75, "Lesson Quality": 68, "Professional Dev": 70, "Differentiation": 68 },
+        CS: { "Faith Formation": 70, "Sacramental Life": 62, "Service Learning": 60, "Catholic Ethos": 68 },
+      },
+      overall: (68.2 + 62.7 + 70.4 + 65.0) / 4,
+      status: "Good",
+    },
+    {
+      id: "SCH003",
+      name: "St. Mary\u2019s RC Primary — Siparia",
+      district: "South",
+      type: "Primary",
+      pillars: { AE: 45.8, SD: 52.1, TL: 48.6, CS: 55.3 },
+      kpiDetail: {
+        AE: { "Literacy Rate": 50, "Numeracy Rate": 42, "SEA Pass Rate": 44, "CSEC 5+": 0, "Value Added": 47 },
+        SD: { "Attendance Rate": 58, "Co-Curricular": 48, "Leadership Programmes": 46, "Student Wellbeing": 56 },
+        TL: { "Teacher Qualifications": 55, "Lesson Quality": 44, "Professional Dev": 46, "Differentiation": 49 },
+        CS: { "Faith Formation": 60, "Sacramental Life": 52, "Service Learning": 50, "Catholic Ethos": 59 },
+      },
+      overall: (45.8 + 52.1 + 48.6 + 55.3) / 4,
+      status: "Developing",
+    },
+  ].sort((a, b) => b.overall - a.overall);
+}
+
+/* ================================================================
    Zoho API Integration
    ================================================================ */
 async function fetchZohoData(config) {
@@ -766,6 +819,13 @@ export default function CEBMDashboard() {
     reader.readAsBinaryString(file);
   }, []);
 
+  /* ---------- Load example data ---------- */
+  const loadExampleData = useCallback(() => {
+    setError("");
+    setSchools(generateSampleSchools());
+    setView("dashboard");
+  }, []);
+
   /* ---------- Go Home (back to upload screen) ---------- */
   const goHome = useCallback(() => {
     setSchools(null);
@@ -950,19 +1010,33 @@ export default function CEBMDashboard() {
               CEBM School Dashboard
             </h2>
             <p style={{ color: T.sage, marginBottom: 28, fontSize: 15 }}>
-              Upload a workbook or connect to Zoho to begin.
+              Upload a school workbook to view performance data, or try with example data.
               <br />
               <span style={{ fontSize: 13 }}>
                 Required sheets: School Register, AE Input, SD Input, TL Input, CS Input
               </span>
             </p>
 
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <label style={{ ...S.goldBtn, display: "inline-block", cursor: "pointer" }}>
-                Upload Workbook
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} hidden />
-              </label>
-              <button style={S.greenBtn} onClick={() => setShowZoho(!showZoho)}>
+            {/* Primary upload button */}
+            <label style={{
+              ...S.goldBtn, display: "inline-flex", alignItems: "center", gap: 10,
+              cursor: "pointer", padding: "14px 32px", fontSize: 17, borderRadius: 10,
+              boxShadow: "0 4px 14px rgba(200,151,62,0.3)",
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload School Workbook
+              <input type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} hidden />
+            </label>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
+              <button style={{ ...S.greenBtn, fontSize: 13, padding: "8px 18px" }} onClick={loadExampleData}>
+                Try with Example Data
+              </button>
+              <button style={{ ...S.greenBtn, fontSize: 13, padding: "8px 18px" }} onClick={() => setShowZoho(!showZoho)}>
                 {showZoho ? "Hide Zoho" : "Connect to Zoho"}
               </button>
             </div>
